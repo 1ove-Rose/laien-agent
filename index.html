@@ -28,7 +28,7 @@
 
       <section class="hero-panel">
         <div class="hero-copy">
-          <p class="eyebrow">美国 App Store 评论智能分析</p>
+          <p class="eyebrow">App Store 评论智能分析</p>
           <h1>从繁杂评论中提炼可追溯的洞察、产品规划与可验证需求。</h1>
           <p>
             在同一个工作台中采集和清洗评论，运行模型辅助分析，审查证据，生成可追溯的
@@ -38,7 +38,7 @@
 
         <form id="analysis-form" class="search-console">
           <label class="search-box">
-            <span>美国 App Store 链接</span>
+            <span>App Store 链接</span>
             <input
               id="app-url"
               name="appUrl"
@@ -46,6 +46,7 @@
               value="https://apps.apple.com/us/app/workout-for-women-home-gym/id839285684"
               required
             />
+            <small id="app-url-error" class="field-error" hidden></small>
           </label>
 
           <label class="field">
@@ -63,6 +64,7 @@
               <span>国家/地区</span>
               <select id="country" name="country">
                 <option value="us" selected>美国</option>
+                <option value="cn">中国</option>
               </select>
             </label>
             <label class="field">
@@ -80,6 +82,11 @@
               <span>开始分析</span>
               <span aria-hidden="true">执行</span>
             </button>
+          </div>
+
+          <div id="form-alert" class="form-alert" role="alert" hidden>
+            <strong></strong>
+            <p></p>
           </div>
 
           <div class="quick-prompts" aria-label="示例应用">

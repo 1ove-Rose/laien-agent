@@ -4,6 +4,7 @@ const fs = require("fs/promises");
 const os = require("os");
 const path = require("path");
 const {
+  applePageUrl,
   collectReviews,
   mapAppleFeed,
   parseAppStoreUrl,
@@ -47,22 +48,26 @@ async function tempCache(t) {
   return directory;
 }
 
-test("parses US and CN App Store links and always selects the US storefront", () => {
+test("parses US and CN App Store links", () => {
   assert.deepEqual(parseAppStoreUrl("https://apps.apple.com/us/app/example/id839285684"), {
     appId: "839285684",
     storefront: "us"
   });
   assert.deepEqual(parseAppStoreUrl("https://apps.apple.com/cn/app/example/id839285684?l=en"), {
     appId: "839285684",
-    storefront: "us"
+    storefront: "cn"
   });
 });
 
 test("rejects non-Apple links, missing IDs, unsupported countries, and invalid limits", () => {
   assert.throws(() => parseAppStoreUrl("https://example.com/us/app/id123"), { code: "INVALID_APP_URL" });
   assert.throws(() => parseAppStoreUrl("https://apps.apple.com/us/app/example"), { code: "INVALID_APP_URL" });
+  assert.equal(
+    validateCollectionInput({ appUrl: "https://apps.apple.com/cn/app/example/id123", country: "cn" }).storefront,
+    "cn"
+  );
   assert.throws(
-    () => validateCollectionInput({ appUrl: "https://apps.apple.com/us/app/example/id123", country: "cn" }),
+    () => validateCollectionInput({ appUrl: "https://apps.apple.com/us/app/example/id123", country: "jp" }),
     { code: "INVALID_COUNTRY" }
   );
   assert.throws(
@@ -71,8 +76,15 @@ test("rejects non-Apple links, missing IDs, unsupported countries, and invalid l
   );
 });
 
+test("builds RSS URLs for supported storefronts", () => {
+  assert.equal(
+    applePageUrl("123", 2, "cn"),
+    "https://itunes.apple.com/cn/rss/customerreviews/page=2/id=123/sortby=mostrecent/json"
+  );
+});
+
 test("maps both a single Apple entry and an entry array", () => {
-  const single = mapAppleFeed({ feed: { entry: makeEntry(1) } }, { appId: "123", fetchedAt: "now" });
+  const single = mapAppleFeed({ feed: { entry: makeEntry(1) } }, { appId: "123", storefront: "cn", fetchedAt: "now" });
   const multiple = mapAppleFeed(
     { feed: { entry: [makeEntry(1), makeEntry(2)] } },
     { appId: "123", fetchedAt: "now" }
@@ -88,7 +100,7 @@ test("maps both a single Apple entry and an entry array", () => {
       rating: single[0].rating,
       sourceType: single[0].sourceType
     },
-    { id: "1", appId: "123", country: "us", rating: 4, sourceType: "apple-rss" }
+    { id: "1", appId: "123", country: "cn", rating: 4, sourceType: "apple-rss" }
   );
 });
 
@@ -115,6 +127,26 @@ for (const [limit, expectedPages] of [[100, 2], [200, 4], [400, 8]]) {
     assert.deepEqual(calls, Array.from({ length: expectedPages }, (_, index) => index + 1));
   });
 }
+
+test("collects reviews from the China storefront when selected", async (t) => {
+  const cacheDir = await tempCache(t);
+  const urls = [];
+  const result = await collectReviews(
+    { appUrl: "https://apps.apple.com/cn/app/example/id123", country: "cn", maxReviews: 1 },
+    {
+      cacheDir,
+      sleepImpl: async () => {},
+      fetchImpl: async (url) => {
+        urls.push(url);
+        return response(200, makePage(1, 1));
+      }
+    }
+  );
+
+  assert.equal(result.storefront, "cn");
+  assert.equal(result.reviews[0].country, "cn");
+  assert.match(urls[0], /itunes\.apple\.com\/cn\/rss\/customerreviews/);
+});
 
 test("reports the shortfall when later pages are empty", async (t) => {
   const cacheDir = await tempCache(t);
@@ -238,7 +270,7 @@ test("ignores a fresh empty cache page and retries the Apple feed", async (t) =>
   const cacheDir = await tempCache(t);
   const input = { appUrl: "https://apps.apple.com/us/app/example/id123", maxReviews: 1 };
   await fs.writeFile(
-    path.join(cacheDir, "123-page-1.json"),
+    path.join(cacheDir, "us-123-page-1.json"),
     JSON.stringify({
       fetchedAt: "2026-08-19T00:10:00Z",
       data: { feed: { title: { label: "Customer Reviews" } } }

@@ -1,6 +1,6 @@
 # App Review Insights
 
-This project is a runnable App Store review analysis workspace. The collection and cleaning stages use real U.S. App Store review data; later semantic analysis, PRD, and test-case stages are still simulated pending the multi-agent implementation.
+This project is a runnable App Store review analysis workspace. The collection and cleaning stages use real App Store review data from a selected storefront; later semantic analysis, PRD, and test-case stages are still simulated pending the multi-agent implementation.
 
 ## Run locally
 
@@ -22,13 +22,13 @@ node --test
 
 ## Review data source
 
-The server extracts the numeric App ID from a validated `https://apps.apple.com/.../id...` URL, then requests the U.S. storefront RSS JSON feed:
+The server extracts the numeric App ID from a validated `https://apps.apple.com/.../id...` URL, then requests the selected storefront RSS JSON feed:
 
 ```text
-https://itunes.apple.com/us/rss/customerreviews/page={page}/id={appId}/sortby=mostrecent/json
+https://itunes.apple.com/{country}/rss/customerreviews/page={page}/id={appId}/sortby=mostrecent/json
 ```
 
-- Requests are server-side and always use the U.S. storefront.
+- Requests are server-side and currently support the U.S. (`us`) and China (`cn`) storefronts.
 - Each page contains up to about 50 recent reviews; this project requests at most 10 pages.
 - Pages are fetched sequentially with a small delay, a 10-second timeout, and up to two retries for retryable errors.
 - Empty RSS pages are skipped and later pages are still attempted because Apple can return sparse review pages.
@@ -60,7 +60,7 @@ Cleaning is deterministic: Unicode NFKC normalization, whitespace cleanup, ratin
 
 ## What is included
 
-- Real U.S. App Store RSS review collection with cache, retries, and transparent warnings.
+- Real App Store RSS review collection with cache, retries, selected storefronts, and transparent warnings.
 - Deterministic cleaning with a detailed removal and normalization report.
 - Modern analysis console for an App Store URL and analysis goal.
 - Pipeline progress for scope, collection, cleaning, analysis, critique, and planning.

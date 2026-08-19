@@ -266,6 +266,52 @@ select:focus {
   box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.14);
 }
 
+input.is-invalid {
+  border-color: var(--red);
+  box-shadow: 0 0 0 3px rgba(185, 28, 28, 0.1);
+}
+
+input.is-invalid:focus {
+  border-color: var(--red);
+}
+
+.field-error {
+  color: var(--red);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.form-alert {
+  display: grid;
+  gap: 4px;
+  border-left: 4px solid var(--amber);
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: #fff7ed;
+  color: #7c2d12;
+}
+
+.form-alert[hidden] {
+  display: none;
+}
+
+.form-alert.is-error {
+  border-left-color: var(--red);
+  background: #fef2f2;
+  color: #7f1d1d;
+}
+
+.form-alert strong {
+  font-size: 13px;
+}
+
+.form-alert p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
 .control-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

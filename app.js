@@ -28,6 +28,9 @@ const state = {
 
 const els = {
   form: document.querySelector("#analysis-form"),
+  appUrlInput: document.querySelector("#app-url"),
+  appUrlError: document.querySelector("#app-url-error"),
+  formAlert: document.querySelector("#form-alert"),
   submitButton: document.querySelector(".primary-action"),
   runStatus: document.querySelector("#run-status"),
   pipelineNote: document.querySelector("#pipeline-note"),
@@ -78,7 +81,9 @@ function init() {
 
   document.querySelectorAll(".quick-prompts button").forEach((button) => {
     button.addEventListener("click", () => {
-      document.querySelector("#app-url").value = button.dataset.url;
+      els.appUrlInput.value = button.dataset.url;
+      clearFieldError();
+      clearAlert();
       resetRunState();
       setRunStatus("待分析", "idle");
       els.pipelineNote.textContent = "提交 App Store 链接后即可开始分析。";
@@ -89,12 +94,32 @@ function init() {
     });
   });
 
+  els.appUrlInput.addEventListener("input", () => {
+    clearFieldError();
+    clearAlert();
+  });
+
   els.form.addEventListener("submit", runAnalysis);
 }
 
 async function runAnalysis(event) {
   event.preventDefault();
   if (state.running) return;
+
+  clearAlert();
+  clearFieldError();
+  let validatedAppId;
+  try {
+    validatedAppId = parseAppId(els.appUrlInput.value);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    setFieldError(message);
+    showAlert("App Store 链接无效", message, "error");
+    setRunStatus("输入错误", "error");
+    els.pipelineNote.textContent = "请先修正 App Store 链接后再执行分析。";
+    els.artifactNote.textContent = "链接校验未通过，尚未开始采集。";
+    return;
+  }
 
   resetRunState();
   state.running = true;
@@ -113,21 +138,20 @@ async function runAnalysis(event) {
     }
 
     await runStage(0, "raw", async () => {
-      const url = document.querySelector("#app-url").value;
-      const appId = parseAppId(url);
       const maxReviews = Number(document.querySelector("#max-reviews").value);
+      const countryLabel = selectedCountryLabel();
       addValidation(
         "pass",
         "输入参数有效",
-        `已识别 App ID ${appId}，目标采集数 ${maxReviews} 条。实际结果可能少于该值。`,
+        `已识别 App ID ${validatedAppId}，目标采集数 ${maxReviews} 条。实际结果可能少于该值。`,
         "范围确认"
       );
-      return `App ID ${appId} · 美国 · 目标采集 ${maxReviews} 条`;
+      return `App ID ${validatedAppId} · ${countryLabel} · 目标采集 ${maxReviews} 条`;
     });
 
     await runStage(1, "raw", async () => {
       const payload = await apiRequest("/api/reviews/collect", {
-        appUrl: document.querySelector("#app-url").value,
+        appUrl: els.appUrlInput.value,
         country: document.querySelector("#country").value,
         maxReviews: Number(document.querySelector("#max-reviews").value)
       });
@@ -153,18 +177,22 @@ async function runAnalysis(event) {
 
     if (state.reviews.length === 0) {
       setRunStatus("无可用评论", "complete");
-      els.pipelineNote.textContent = "Apple RSS 当前没有返回可用评论，任务已停止在采集阶段。";
+      els.pipelineNote.textContent = `${selectedCountryLabel()} App Store RSS 当前没有返回可用评论，任务已停止在采集阶段。`;
       els.artifactNote.textContent = "没有生成后续分析产物；系统不会使用样例或伪造评论补齐结果。";
+      showAlert(
+        "未采集到可用评论",
+        `${selectedCountryLabel()}地区的公开 Apple RSS 当前没有为该 App 返回评论。可以切换国家/地区、稍后重试，或更换有公开评论的 App。`
+      );
       addActivity(
         "system",
         "采集结束",
-        "Apple RSS 返回 0 条可用评论，后续清洗、分类、洞察、PRD 和测试阶段已跳过。",
+        `${selectedCountryLabel()} App Store RSS 返回 0 条可用评论，后续清洗、分类、洞察、PRD 和测试阶段已跳过。`,
         "评论采集"
       );
       addValidation(
         "revised",
         "无可用评论",
-        "当前数据源没有返回评论；请稍后重试、清理缓存后重试，或更换有公开美国区评论的 App。",
+        "当前所选地区数据源没有返回评论；请稍后重试、清理缓存后重试，或更换有公开评论的 App。",
         "评论采集"
       );
       selectTab("raw");
@@ -173,7 +201,7 @@ async function runAnalysis(event) {
 
     await runStage(2, "cleaned", async () => {
       const payload = await apiRequest("/api/reviews/clean", {
-        appId: parseAppId(document.querySelector("#app-url").value),
+        appId: validatedAppId,
         reviews: state.reviews
       });
       state.cleaned = payload.reviews;
@@ -349,6 +377,39 @@ function parseAppId(url) {
   const match = parsed.pathname.match(/(?:^|\/)id(\d+)(?:\/|$)/i);
   if (!match) throw new Error("无法从 App Store 链接中识别应用 ID。链接应包含 id 加数字。");
   return match[1];
+}
+
+function selectedCountryLabel() {
+  const select = document.querySelector("#country");
+  return select.options[select.selectedIndex]?.textContent || "所选地区";
+}
+
+function setFieldError(message) {
+  els.appUrlInput.classList.add("is-invalid");
+  els.appUrlInput.setAttribute("aria-invalid", "true");
+  els.appUrlError.textContent = message;
+  els.appUrlError.hidden = false;
+}
+
+function clearFieldError() {
+  els.appUrlInput.classList.remove("is-invalid");
+  els.appUrlInput.removeAttribute("aria-invalid");
+  els.appUrlError.textContent = "";
+  els.appUrlError.hidden = true;
+}
+
+function showAlert(title, detail, tone = "warning") {
+  els.formAlert.classList.toggle("is-error", tone === "error");
+  els.formAlert.querySelector("strong").textContent = title;
+  els.formAlert.querySelector("p").textContent = detail;
+  els.formAlert.hidden = false;
+}
+
+function clearAlert() {
+  els.formAlert.hidden = true;
+  els.formAlert.classList.remove("is-error");
+  els.formAlert.querySelector("strong").textContent = "";
+  els.formAlert.querySelector("p").textContent = "";
 }
 
 async function apiRequest(url, body) {
@@ -672,7 +733,7 @@ function renderRawReviews() {
           `
         )
         .join("")
-    : tableEmptyState(5, "评论采集阶段完成后将在此展示 Apple 美国区原始评论。");
+    : tableEmptyState(5, "评论采集阶段完成后将在此展示所选地区 App Store 原始评论。");
 }
 
 function renderCleanedReviews() {
