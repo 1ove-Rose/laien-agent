@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>应用评论洞察</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="site-header">
+        <a class="brand" href="#" aria-label="应用评论洞察首页">
+          <span class="brand-mark">A</span>
+          <span>
+            <strong>应用评论洞察</strong>
+            <small>从证据到产品路线图</small>
+          </span>
+        </a>
+        <nav class="nav-links" aria-label="主导航">
+          <a href="#pipeline">分析流程</a>
+          <a href="#execution">执行监控</a>
+          <a href="#insights">洞察发现</a>
+          <a href="#prd">产品需求</a>
+          <a href="#tests">测试用例</a>
+        </nav>
+        <div class="status-pill" id="run-status">待分析</div>
+      </header>
+
+      <section class="hero-panel">
+        <div class="hero-copy">
+          <p class="eyebrow">美国 App Store 评论智能分析</p>
+          <h1>从繁杂评论中提炼可追溯的洞察、产品规划与可验证需求。</h1>
+          <p>
+            在同一个工作台中采集和清洗评论，运行模型辅助分析，审查证据，生成可追溯的
+            PRD 与 QA 测试用例。
+          </p>
+        </div>
+
+        <form id="analysis-form" class="search-console">
+          <label class="search-box">
+            <span>美国 App Store 链接</span>
+            <input
+              id="app-url"
+              name="appUrl"
+              type="url"
+              value="https://apps.apple.com/us/app/workout-for-women-home-gym/id839285684"
+              required
+            />
+          </label>
+
+          <label class="field">
+            <span>分析目标</span>
+            <textarea
+              id="analysis-goal"
+              name="goal"
+              rows="3"
+              required
+            >关注低评分评论、订阅阻碍、易用性缺陷，以及可转化为产品路线图需求的主题。</textarea>
+          </label>
+
+          <div class="control-grid">
+            <label class="field">
+              <span>国家/地区</span>
+              <select id="country" name="country">
+                <option value="us" selected>美国</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>最大评论数</span>
+              <select id="max-reviews" name="maxReviews">
+                <option value="100">100</option>
+                <option value="200" selected>200</option>
+                <option value="400">400</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="console-actions">
+            <button class="primary-action" type="submit">
+              <span>开始分析</span>
+              <span aria-hidden="true">执行</span>
+            </button>
+          </div>
+
+          <div class="quick-prompts" aria-label="示例应用">
+            <button type="button" data-url="https://apps.apple.com/us/app/chatgpt/id6448311069">
+              ChatGPT
+            </button>
+            <button type="button" data-url="https://apps.apple.com/us/app/duolingo-language-lessons/id570060128">
+              Duolingo
+            </button>
+            <button type="button" data-url="https://apps.apple.com/us/app/workout-for-women-home-gym/id839285684">
+              女性健身
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <section class="signal-strip" aria-label="评论统计指标">
+        <article class="metric-card">
+          <span>已采集</span>
+          <strong id="metric-collected">0</strong>
+          <small>原始评论数</small>
+        </article>
+        <article class="metric-card">
+          <span>已清洗</span>
+          <strong id="metric-cleaned">0</strong>
+          <small>可用记录数</small>
+        </article>
+        <article class="metric-card">
+          <span>平均评分</span>
+          <strong id="metric-rating">0.0</strong>
+          <small>清洗后统计</small>
+        </article>
+        <article class="metric-card">
+          <span>追溯链路</span>
+          <strong id="metric-trace">0</strong>
+          <small>已验证产出</small>
+        </article>
+      </section>
+
+      <section class="workspace-grid">
+        <section id="pipeline" class="panel panel-large">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">实时生成</p>
+              <h2>分析流程</h2>
+            </div>
+            <p id="pipeline-note">提交 App Store 链接后即可开始分析。</p>
+          </div>
+          <div id="pipeline-steps" class="pipeline-steps"></div>
+        </section>
+
+        <section id="execution" class="panel panel-large execution-panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">过程可观测</p>
+              <h2>执行监控</h2>
+            </div>
+            <p>实时记录阶段进展、中间结果、验证结论、错误和修订情况。</p>
+          </div>
+
+          <div class="execution-grid">
+            <div class="activity-column">
+              <div class="subsection-heading">
+                <div>
+                  <strong>执行事件</strong>
+                  <span id="activity-summary">等待任务启动</span>
+                </div>
+                <span class="live-indicator" id="live-indicator">未运行</span>
+              </div>
+              <ol id="activity-list" class="activity-list" aria-live="polite"></ol>
+            </div>
+
+            <div class="validation-column">
+              <div class="subsection-heading">
+                <div>
+                  <strong>验证与修订</strong>
+                  <span>持续检查证据和追溯关系</span>
+                </div>
+              </div>
+              <div class="validation-metrics">
+                <div><strong id="validation-passed">0</strong><span>验证通过</span></div>
+                <div><strong id="validation-errors">0</strong><span>错误</span></div>
+                <div><strong id="validation-revisions">0</strong><span>已修订</span></div>
+              </div>
+              <div id="validation-list" class="validation-list"></div>
+              <div id="revision-list" class="revision-list"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel panel-large tabs" aria-label="分析结果标签页">
+          <div class="artifact-header">
+            <div>
+              <p class="eyebrow">中间与最终交付</p>
+              <h2>产物工作区</h2>
+            </div>
+            <p id="artifact-note">原始评论已就绪，运行分析后将逐阶段生成后续产物。</p>
+          </div>
+          <div class="tab-list" role="tablist">
+            <button class="tab is-active" type="button" data-tab="raw">
+              原始评论 <span id="count-raw">0</span>
+            </button>
+            <button class="tab" type="button" data-tab="cleaned">
+              清洗数据 <span id="count-cleaned">0</span>
+            </button>
+            <button class="tab" type="button" data-tab="categories">
+              分类结果 <span id="count-categories">0</span>
+            </button>
+            <button class="tab" type="button" data-tab="insights">
+              洞察发现 <span id="count-insights">0</span>
+            </button>
+            <button class="tab" type="button" data-tab="prd">
+              PRD 初稿 <span id="count-prd">0</span>
+            </button>
+            <button class="tab" type="button" data-tab="tests">
+              测试用例初稿 <span id="count-tests">0</span>
+            </button>
+          </div>
+
+          <div class="tab-panel is-active" id="panel-raw">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">数据源快照</p>
+                <h2>原始评论</h2>
+              </div>
+              <p>保留采集时的原始字段，作为后续分析与追溯的证据源。</p>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>评分</th>
+                    <th>版本</th>
+                    <th>日期</th>
+                    <th>评论</th>
+                  </tr>
+                </thead>
+                <tbody id="raw-reviews-table"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="tab-panel" id="panel-cleaned">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">标准化结果</p>
+                <h2>清洗后的数据</h2>
+              </div>
+              <p>展示字段标准化、空值过滤和稳定去重后的可用记录。</p>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>状态</th>
+                    <th>评分</th>
+                    <th>版本</th>
+                    <th>标准化评论</th>
+                  </tr>
+                </thead>
+                <tbody id="cleaned-reviews-table"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="tab-panel" id="panel-categories">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">语义中间结果</p>
+                <h2>评论分类结果</h2>
+              </div>
+              <p>每条评论标注情感、主题、严重程度和分类依据。</p>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>评论 ID</th>
+                    <th>情感</th>
+                    <th>主题</th>
+                    <th>严重程度</th>
+                    <th>分类依据</th>
+                  </tr>
+                </thead>
+                <tbody id="category-table"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="tab-panel" id="panel-insights">
+            <div id="insights" class="section-heading">
+              <div>
+                <p class="eyebrow">证据优先</p>
+                <h2>洞察发现</h2>
+              </div>
+              <p>每项发现均需包含评论引用、支持数量、冲突信息和置信度。</p>
+            </div>
+            <div id="insight-list" class="result-list"></div>
+          </div>
+
+          <div class="tab-panel" id="panel-prd">
+            <div id="prd" class="section-heading">
+              <div>
+                <p class="eyebrow">产品规划初稿</p>
+                <h2>PRD 初稿</h2>
+              </div>
+              <p>每条需求均关联源洞察和评论证据。</p>
+            </div>
+            <div id="prd-list" class="result-list"></div>
+          </div>
+
+          <div class="tab-panel" id="panel-tests">
+            <div id="tests" class="section-heading">
+              <div>
+                <p class="eyebrow">QA 初稿</p>
+                <h2>测试用例初稿</h2>
+              </div>
+              <p>每个测试均映射至需求，并继承源评论链接。</p>
+            </div>
+            <div id="test-list" class="result-list"></div>
+          </div>
+        </section>
+
+      </section>
+    </main>
+
+    <script src="sample-reviews.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

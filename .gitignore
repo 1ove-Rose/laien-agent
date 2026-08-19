@@ -1,0 +1,8 @@
+.idea/
+.env
+.env.*
+*.log
+node_modules/
+dist/
+.DS_Store
+Thumbs.db
