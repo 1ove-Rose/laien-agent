@@ -1,5 +1,5 @@
 const pipeline = [
-  { id: "scope", name: "范围确认", description: "解析应用链接、国家/地区、分析目标和评论上限。" },
+  { id: "scope", name: "范围确认", description: "解析应用链接、国家/地区、分析目标和目标采集数。" },
   { id: "collect", name: "评论采集", description: "获取评论并保留原始字段与来源标识。" },
   { id: "clean", name: "数据清洗", description: "标准化字段、移除空评论并执行稳定去重。" },
   { id: "classify", name: "评论分类", description: "标注情感、主题、严重程度和分类依据。" },
@@ -8,8 +8,10 @@ const pipeline = [
 ];
 
 const state = {
-  reviews: window.sampleReviews,
+  reviews: [],
   cleaned: [],
+  collection: null,
+  cleanReport: null,
   categories: [],
   insights: [],
   requirements: [],
@@ -64,6 +66,10 @@ const els = {
 };
 
 function init() {
+  if (window.location.protocol === "file:") {
+    els.pipelineNote.textContent = "真实采集需要通过 node serve.js 启动本地服务。";
+    els.artifactNote.textContent = "当前为 file:// 模式，后端采集与清洗接口不可用。";
+  }
   renderAll();
 
   document.querySelectorAll(".tab").forEach((tab) => {
@@ -76,7 +82,7 @@ function init() {
       resetRunState();
       setRunStatus("待分析", "idle");
       els.pipelineNote.textContent = "提交 App Store 链接后即可开始分析。";
-      els.artifactNote.textContent = "原始评论已就绪，运行分析后将逐阶段生成后续产物。";
+      els.artifactNote.textContent = "运行分析后将采集真实评论并逐阶段生成产物。";
       els.liveIndicator.textContent = "未运行";
       selectTab("raw");
       renderAll();
@@ -102,15 +108,31 @@ async function runAnalysis(event) {
   renderAll();
 
   try {
+    if (window.location.protocol === "file:") {
+      throw new Error("真实评论采集不能在 file:// 模式运行，请执行 node serve.js 后访问 http://127.0.0.1:8765/。");
+    }
+
     await runStage(0, "raw", async () => {
       const url = document.querySelector("#app-url").value;
       const appId = parseAppId(url);
-      const maxReviews = document.querySelector("#max-reviews").value;
-      addValidation("pass", "输入参数有效", `已识别 App ID ${appId}，评论上限 ${maxReviews} 条。`, "范围确认");
-      return `App ID ${appId} · 美国 · 上限 ${maxReviews} 条`;
+      const maxReviews = Number(document.querySelector("#max-reviews").value);
+      addValidation(
+        "pass",
+        "输入参数有效",
+        `已识别 App ID ${appId}，目标采集数 ${maxReviews} 条。实际结果可能少于该值。`,
+        "范围确认"
+      );
+      return `App ID ${appId} · 美国 · 目标采集 ${maxReviews} 条`;
     });
 
     await runStage(1, "raw", async () => {
+      const payload = await apiRequest("/api/reviews/collect", {
+        appUrl: document.querySelector("#app-url").value,
+        country: document.querySelector("#country").value,
+        maxReviews: Number(document.querySelector("#max-reviews").value)
+      });
+      state.reviews = payload.reviews;
+      state.collection = payload.collection;
       const validIds = state.reviews.filter((review) => review.id).length;
       addValidation(
         "pass",
@@ -118,19 +140,60 @@ async function runAnalysis(event) {
         `${validIds}/${state.reviews.length} 条评论包含可追溯 ID。`,
         "评论采集"
       );
-      return `采集 ${state.reviews.length} 条原始评论，来源快照已保留`;
+      payload.collection.warnings.forEach((warning) => {
+        addValidation("revised", "采集限制或回退", warning, "评论采集");
+      });
+      const source = payload.collection.staleCache
+        ? "Apple RSS（含过期缓存）"
+        : payload.collection.fromCache
+          ? "Apple RSS（含缓存）"
+          : "Apple RSS";
+      return `${source} · ${payload.collection.pagesFetched}/${payload.collection.pagesRequested} 页 · 实际 ${state.reviews.length} 条`;
     });
 
+    if (state.reviews.length === 0) {
+      setRunStatus("无可用评论", "complete");
+      els.pipelineNote.textContent = "Apple RSS 当前没有返回可用评论，任务已停止在采集阶段。";
+      els.artifactNote.textContent = "没有生成后续分析产物；系统不会使用样例或伪造评论补齐结果。";
+      addActivity(
+        "system",
+        "采集结束",
+        "Apple RSS 返回 0 条可用评论，后续清洗、分类、洞察、PRD 和测试阶段已跳过。",
+        "评论采集"
+      );
+      addValidation(
+        "revised",
+        "无可用评论",
+        "当前数据源没有返回评论；请稍后重试、清理缓存后重试，或更换有公开美国区评论的 App。",
+        "评论采集"
+      );
+      selectTab("raw");
+      return;
+    }
+
     await runStage(2, "cleaned", async () => {
-      state.cleaned = cleanReviews(state.reviews);
-      const removed = state.reviews.length - state.cleaned.length;
+      const payload = await apiRequest("/api/reviews/clean", {
+        appId: parseAppId(document.querySelector("#app-url").value),
+        reviews: state.reviews
+      });
+      state.cleaned = payload.reviews;
+      state.cleanReport = payload.report;
+      const report = payload.report;
       addValidation(
         "pass",
         "清洗规则校验",
-        `保留 ${state.cleaned.length} 条可用记录，过滤或去重 ${removed} 条。`,
+        `保留 ${report.outputCount} 条；移除 ${report.removedCount} 条，其中非法评分 ${report.invalidRatingCount}、空正文 ${report.emptyTextCount}、重复 ID ${report.duplicateIdCount}、重复内容 ${report.duplicateContentCount}。`,
         "数据清洗"
       );
-      return `${state.cleaned.length} 条标准化记录 · ${removed} 条被过滤或去重`;
+      if (report.generatedIdCount > 0) {
+        addValidation(
+          "revised",
+          "补全缺失评论 ID",
+          `${report.generatedIdCount} 条评论缺少来源 ID，已生成稳定哈希 ID。`,
+          "数据清洗"
+        );
+      }
+      return `${report.outputCount} 条标准化记录 · ${report.removedCount} 条被过滤或去重`;
     });
 
     await runStage(3, "categories", async () => {
@@ -237,7 +300,10 @@ async function runStage(index, tabName, task) {
 }
 
 function resetRunState() {
+  state.reviews = [];
   state.cleaned = [];
+  state.collection = null;
+  state.cleanReport = null;
   state.categories = [];
   state.insights = [];
   state.requirements = [];
@@ -271,9 +337,43 @@ function addRevision(title, detail, stage) {
 }
 
 function parseAppId(url) {
-  const match = url.match(/id(\d+)/i);
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error("请输入有效的 App Store 链接。");
+  }
+  if (parsed.protocol !== "https:" || parsed.hostname.toLowerCase() !== "apps.apple.com") {
+    throw new Error("链接必须来自 https://apps.apple.com。");
+  }
+  const match = parsed.pathname.match(/(?:^|\/)id(\d+)(?:\/|$)/i);
   if (!match) throw new Error("无法从 App Store 链接中识别应用 ID。链接应包含 id 加数字。");
   return match[1];
+}
+
+async function apiRequest(url, body) {
+  let response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+  } catch {
+    throw new Error("无法连接本地后端，请确认已通过 node serve.js 启动服务。");
+  }
+
+  let payload;
+  try {
+    payload = await response.json();
+  } catch {
+    throw new Error(`后端返回了无法识别的响应（HTTP ${response.status}）。`);
+  }
+  if (!response.ok) {
+    const suffix = payload.error?.retryable ? " 可以稍后重试。" : "";
+    throw new Error(`${payload.error?.message || "请求失败。"}${suffix}`);
+  }
+  return payload;
 }
 
 function setFormRunning(running) {
@@ -383,28 +483,6 @@ function selectTab(tabName) {
   document.querySelectorAll(".tab-panel").forEach((panel) => {
     panel.classList.toggle("is-active", panel.id === `panel-${tabName}`);
   });
-}
-
-function cleanReviews(reviews) {
-  const seen = new Set();
-  return reviews
-    .map((review, index) => ({
-      id: review.id || `review-${index + 1}`,
-      rating: Number(review.rating || 0),
-      version: review.version || "未知",
-      title: String(review.title || "").trim(),
-      text: String(review.text || review.content || "").trim().replace(/\s+/g, " "),
-      createdAt: review.createdAt || review.date || "未知",
-      sourceType: review.sourceType || "未知来源",
-      cleanStatus: "已标准化"
-    }))
-    .filter((review) => review.text.length > 0)
-    .filter((review) => {
-      const key = `${review.rating}:${review.version}:${review.text.toLowerCase()}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
 }
 
 function buildClassifications(reviews) {
@@ -580,19 +658,21 @@ function renderArtifactCounts() {
 }
 
 function renderRawReviews() {
-  els.rawReviewsTable.innerHTML = state.reviews
-    .map(
-      (review) => `
-        <tr>
-          <td>${escapeHtml(review.id || "无 ID")}</td>
-          <td class="rating">${Number(review.rating || 0)}</td>
-          <td>${escapeHtml(review.version || "未知")}</td>
-          <td>${escapeHtml(review.createdAt || review.date || "未知")}</td>
-          <td><strong>${escapeHtml(review.title || "无标题")}</strong><br />${escapeHtml(review.text || review.content || "")}</td>
-        </tr>
-      `
-    )
-    .join("");
+  els.rawReviewsTable.innerHTML = state.reviews.length
+    ? state.reviews
+        .map(
+          (review) => `
+            <tr>
+              <td>${escapeHtml(review.id || "无 ID")}</td>
+              <td class="rating">${Number(review.rating || 0)}</td>
+              <td>${escapeHtml(review.version || "未知")}</td>
+              <td>${escapeHtml(review.createdAt || review.date || "未知")}</td>
+              <td><strong>${escapeHtml(review.title || "无标题")}</strong><br />${escapeHtml(review.text || review.content || "")}</td>
+            </tr>
+          `
+        )
+        .join("")
+    : tableEmptyState(5, "评论采集阶段完成后将在此展示 Apple 美国区原始评论。");
 }
 
 function renderCleanedReviews() {
@@ -602,7 +682,7 @@ function renderCleanedReviews() {
           (review) => `
             <tr>
               <td>${escapeHtml(review.id)}</td>
-              <td><span class="inline-status is-pass">${review.cleanStatus}</span></td>
+              <td><span class="inline-status is-pass">${review.cleanStatus === "normalized" ? "已标准化" : escapeHtml(review.cleanStatus)}</span></td>
               <td class="rating">${review.rating}</td>
               <td>${escapeHtml(review.version)}</td>
               <td><strong>${escapeHtml(review.title)}</strong><br />${escapeHtml(review.text)}</td>
