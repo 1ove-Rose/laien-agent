@@ -224,56 +224,12 @@ async function runAnalysis(event) {
       return `${report.outputCount} 条标准化记录 · ${report.removedCount} 条被过滤或去重`;
     });
 
-    await runStage(3, "categories", async () => {
-      state.categories = buildClassifications(state.cleaned);
-      const themes = new Set(state.categories.map((item) => item.theme));
-      addValidation(
-        "pass",
-        "分类覆盖率",
-        `${state.categories.length}/${state.cleaned.length} 条评论已完成语义分类。`,
-        "评论分类"
-      );
-      return `${state.categories.length} 条分类结果 · ${themes.size} 个主题`;
-    });
-
-    await runStage(4, "insights", async () => {
-      state.insights = buildInsights(state.cleaned);
-      addValidation(
-        "revised",
-        "F-1 范围表述需要收敛",
-        "初稿将订阅问题泛化为产品价值问题，证据不足，已限定为付费流程问题。",
-        "洞察与验证"
-      );
-      addRevision(
-        "F-1 洞察修订",
-        "补充正向评论形成的冲突证据，并将结论范围收敛到订阅与试用流程。",
-        "洞察与验证"
-      );
-      addValidation(
-        "pass",
-        "洞察证据引用",
-        `${state.insights.length}/${state.insights.length} 条发现包含评论 ID、支持数和置信度。`,
-        "洞察与验证"
-      );
-      return `${state.insights.length} 条发现 · 1 次证据修订 · 复验通过`;
-    });
-
-    await runStage(5, "prd", async () => {
-      state.requirements = buildRequirements(state.insights);
-      state.tests = buildTests(state.requirements);
-      const traceResult = validateTraceability();
-
-      if (traceResult.missing.length) {
-        throw new Error(`发现 ${traceResult.missing.length} 条追溯关系缺失。`);
-      }
-
-      addValidation(
-        "pass",
-        "端到端追溯验证",
-        `${traceResult.valid} 条“评论 → 洞察 → 需求 → 测试”链路验证通过。`,
-        "需求与测试"
-      );
-      return `${state.requirements.length} 条 PRD 初稿 · ${state.tests.length} 条测试用例初稿`;
+    await streamAgentAnalysis({
+      appId: parseAppId(document.querySelector("#app-url").value),
+      goal: document.querySelector("#analysis-goal").value,
+      reviews: state.cleaned,
+      collection: state.collection,
+      cleanReport: state.cleanReport
     });
 
     state.currentStage = -1;
@@ -325,6 +281,178 @@ async function runStage(index, tabName, task) {
   addActivity("result", `${pipeline[index].name}产出`, output, pipeline[index].name);
   renderAll();
   await wait(360);
+}
+
+async function streamAgentAnalysis(body) {
+  state.currentStage = 3;
+  state.stageStatuses[3] = "running";
+  selectTab("categories");
+  renderAll();
+
+  const response = await fetch("/api/analysis/run", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "text/event-stream"
+    },
+    body: JSON.stringify(body)
+  }).catch(() => {
+    throw new Error("无法连接本地后端，请确认已通过 node serve.js 启动服务。");
+  });
+
+  if (!response.ok) {
+    let payload;
+    try {
+      payload = await response.json();
+    } catch {
+      throw new Error(`多 Agent 服务返回了无法识别的响应（HTTP ${response.status}）。`);
+    }
+    throw new Error(payload.error?.message || "多 Agent 分析失败。");
+  }
+
+  if (!response.body) {
+    throw new Error("多 Agent 服务没有返回流式响应。");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let completed = false;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const parts = buffer.split(/\r?\n\r?\n/);
+    buffer = parts.pop() || "";
+    for (const part of parts) {
+      const event = parseSseEvent(part);
+      if (!event) continue;
+      applyAgentEvent(event);
+      if (event.type === "completed") completed = true;
+      if (event.type === "error") {
+        const error = event.data?.error || {};
+        throw new Error(error.message || event.message || "多 Agent 分析失败。");
+      }
+    }
+  }
+
+  if (buffer.trim()) {
+    const event = parseSseEvent(buffer);
+    if (event) {
+      applyAgentEvent(event);
+      if (event.type === "completed") completed = true;
+      if (event.type === "error") {
+        const error = event.data?.error || {};
+        throw new Error(error.message || event.message || "多 Agent 分析失败。");
+      }
+    }
+  }
+
+  if (!completed) {
+    throw new Error("多 Agent 流式响应中断，未收到完成事件。");
+  }
+}
+
+function parseSseEvent(block) {
+  const data = block
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith("data:"))
+    .map((line) => line.slice(5).trimStart())
+    .join("\n");
+  if (!data) return null;
+  try {
+    return JSON.parse(data);
+  } catch {
+    throw new Error("多 Agent 服务返回了无效事件数据。");
+  }
+}
+
+function applyAgentEvent(event) {
+  const stageIndex = agentStageIndex(event.stage);
+  if (stageIndex >= 0) state.currentStage = stageIndex;
+
+  if (event.type === "stage_started") {
+    if (stageIndex >= 0) state.stageStatuses[stageIndex] = "running";
+    els.pipelineNote.textContent = event.message;
+    addActivity("stage", `${event.stage}开始`, event.message, event.stage);
+    selectAgentTab(event.stage);
+  } else if (event.type === "stage_completed") {
+    if (stageIndex >= 0) {
+      state.stageStatuses[stageIndex] = "done";
+      state.stageOutputs[stageIndex] = event.message;
+    }
+    addActivity("result", `${event.stage}完成`, event.message, event.stage);
+  } else if (event.type === "artifact") {
+    applyAgentArtifact(event.data || {});
+    addActivity("result", `${event.stage}产物`, event.message, event.stage);
+    selectAgentTab(event.stage);
+  } else if (event.type === "validation") {
+    const validation = event.data || {};
+    addValidation(
+      validation.type || "pass",
+      validation.title || event.message,
+      validation.detail || event.message,
+      validation.stage || event.stage
+    );
+  } else if (event.type === "revision") {
+    const revision = event.data || {};
+    addRevision(revision.title || event.message, revision.detail || revision.notes || event.message, revision.stage || event.stage);
+    addActivity("result", event.message, revision.notes || revision.detail || event.message, event.stage);
+  } else if (event.type === "retry") {
+    addValidation("revised", "阶段重试", event.message, event.stage);
+  } else if (event.type === "completed") {
+    applyAgentArtifact(event.data || {});
+    state.stageStatuses[3] = "done";
+    state.stageStatuses[4] = "done";
+    state.stageStatuses[5] = "done";
+    state.stageOutputs[3] ||= `${state.categories.length} 条分类结果`;
+    state.stageOutputs[4] ||= `${state.insights.length} 条洞察与验证结果`;
+    state.stageOutputs[5] ||= `${state.requirements.length} 条 PRD 初稿 · ${state.tests.length} 条测试用例初稿`;
+    addActivity("success", event.message, "多 Agent 服务已返回最终产物。", event.stage);
+  } else if (event.type === "error") {
+    if (stageIndex >= 0) state.stageStatuses[stageIndex] = "error";
+    addActivity("error", event.message, event.data?.error?.message || event.message, event.stage);
+  }
+
+  renderAll();
+}
+
+function applyAgentArtifact(data) {
+  if (Array.isArray(data.classifications)) state.categories = data.classifications;
+  if (Array.isArray(data.insights)) state.insights = data.insights;
+  if (Array.isArray(data.requirements)) state.requirements = data.requirements;
+  if (Array.isArray(data.tests)) state.tests = data.tests;
+  if (Array.isArray(data.validations)) state.validations = mergeRecords(state.validations, data.validations);
+  if (Array.isArray(data.revisions)) state.revisions = mergeRecords(state.revisions, data.revisions);
+}
+
+function mergeRecords(existing, incoming) {
+  const seen = new Set(existing.map((item) => JSON.stringify(item)));
+  const merged = [...existing];
+  incoming.forEach((item) => {
+    const key = JSON.stringify(item);
+    if (!seen.has(key)) {
+      seen.add(key);
+      merged.push(item);
+    }
+  });
+  return merged;
+}
+
+function agentStageIndex(stage) {
+  if (stage === "评论分类") return 3;
+  if (stage === "洞察发现" || stage === "证据审查") return 4;
+  if (stage === "产品需求" || stage === "测试用例" || stage === "追溯验证") return 5;
+  if (stage === "多 Agent 编排") return 3;
+  return -1;
+}
+
+function selectAgentTab(stage) {
+  if (stage === "评论分类") selectTab("categories");
+  else if (stage === "洞察发现" || stage === "证据审查") selectTab("insights");
+  else if (stage === "产品需求") selectTab("prd");
+  else if (stage === "测试用例" || stage === "追溯验证") selectTab("tests");
 }
 
 function resetRunState() {
