@@ -96,7 +96,16 @@ p {
   border-radius: 8px;
   background: #0f172a;
   color: #5eead4;
-  font-weight: 900;
+}
+
+.brand-mark svg {
+  width: 23px;
+  height: 23px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
 }
 
 .brand strong,
@@ -114,20 +123,37 @@ p {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 3px;
   color: var(--muted);
   font-size: 14px;
   font-weight: 750;
 }
 
 .nav-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   border-radius: 6px;
-  padding: 8px 10px;
+  padding: 9px 11px;
+  white-space: nowrap;
+  transition: background-color 160ms ease, color 160ms ease;
 }
 
-.nav-links a:hover {
+.nav-links a:hover,
+.nav-links a:focus-visible {
   background: var(--surface-strong);
   color: var(--ink);
+}
+
+.nav-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
 }
 
 .status-pill,
@@ -213,6 +239,42 @@ p {
   align-content: start;
   gap: 16px;
   padding: 22px;
+}
+
+.input-mode-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+  padding: 4px;
+  border-radius: 8px;
+  background: var(--surface-strong);
+}
+
+.input-mode {
+  min-height: 38px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.input-mode.is-active {
+  background: #fff;
+  color: var(--accent-strong);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+}
+
+.import-file-field input[type="file"] {
+  min-height: 46px;
+  padding: 10px 13px;
+}
+
+.field-hint {
+  color: var(--soft);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .search-box,
@@ -346,6 +408,11 @@ input.is-invalid:focus {
   flex-wrap: wrap;
   gap: 8px;
   padding-top: 2px;
+}
+
+.control-grid[hidden],
+.quick-prompts[hidden] {
+  display: none;
 }
 
 .quick-prompts button,
@@ -778,6 +845,28 @@ input.is-invalid:focus {
   line-height: 1.55;
 }
 
+.data-limitations {
+  margin-bottom: 16px;
+  border-left: 3px solid var(--amber);
+  border-radius: 6px;
+  padding: 10px 13px;
+  background: #fffbeb;
+  color: #78350f;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.data-limitations strong {
+  display: block;
+  margin-bottom: 4px;
+  color: #92400e;
+}
+
+.data-limitations ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
 .tabs {
   margin-top: 0;
 }
@@ -902,6 +991,43 @@ tbody tr:last-child td {
   gap: 12px;
 }
 
+.insight-version-section + .insight-version-section {
+  margin-top: 30px;
+  padding-top: 26px;
+  border-top: 1px solid var(--line);
+}
+
+.insight-version-heading {
+  margin-bottom: 14px;
+}
+
+.insight-version-heading h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 16px;
+}
+
+.insight-version-heading h3 span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 22px;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #eef2f7;
+  color: var(--muted);
+  font-size: 11px;
+  vertical-align: 2px;
+}
+
+.insight-version-heading p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .result-item {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -951,6 +1077,30 @@ tbody tr:last-child td {
 .tag.is-risk {
   background: #fef2f2;
   color: var(--red);
+}
+
+.tag.is-pass {
+  background: #e7f8f5;
+  color: var(--accent-strong);
+}
+
+.finding-status-note,
+.finding-conflict-note {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.rejected-heading {
+  margin: 20px 0 8px;
+  color: var(--red);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.rejected-item {
+  border-color: #fecaca;
+  background: #fffafa;
 }
 
 .empty-state {

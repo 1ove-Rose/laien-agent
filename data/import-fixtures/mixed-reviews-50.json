@@ -1,0 +1,451 @@
+[
+  {
+    "id": "rv-001",
+    "rating": 5,
+    "version": "3.2.0",
+    "title": "订阅说明很清楚",
+    "text": "升级页面把月费和自动续费日期写得很清楚，我没有遇到隐藏收费。",
+    "author": "Lin",
+    "createdAt": "2026-08-01T09:15:00Z"
+  },
+  {
+    "id": "rv-002",
+    "rating": 1,
+    "version": "3.2.0",
+    "title": "订阅费用不透明",
+    "text": "免费试用结束后直接扣费，我在确认页没有看清自动续费说明。",
+    "author": "Ming",
+    "createdAt": "2026-08-02T11:20:00Z"
+  },
+  {
+    "id": "rv-003",
+    "rating": 2,
+    "version": "3.1.9",
+    "title": "取消订阅太难",
+    "text": "I could not find the cancellation entry in the app and had to search the App Store settings.",
+    "author": "Alex",
+    "createdAt": "2026-08-03T15:10:00Z"
+  },
+  {
+    "id": "rv-004",
+    "rating": 5,
+    "version": "3.2.0",
+    "title": "Easy cancellation",
+    "text": "The subscription page clearly sent me to Apple settings and I cancelled in less than a minute.",
+    "author": "Jamie",
+    "createdAt": "2026-08-04T07:42:00Z"
+  },
+  {
+    "id": "rv-005",
+    "rating": 1,
+    "version": "3.2.0",
+    "title": "Audio timer drifts",
+    "text": "The voice cue says the next exercise about five seconds after the timer has already changed.",
+    "author": "Taylor",
+    "createdAt": "2026-08-04T08:00:00Z"
+  },
+  {
+    "id": "rv-006",
+    "rating": 5,
+    "version": "3.2.0",
+    "title": "Perfect audio timing",
+    "text": "Voice prompts and countdown stay perfectly synchronized during every workout.",
+    "author": "Morgan",
+    "createdAt": "2026-08-04T12:00:00Z"
+  },
+  {
+    "id": "rv-007",
+    "rating": 2,
+    "version": "3.1.8",
+    "title": "进度记录丢失",
+    "text": "更新后连续打卡天数归零，过去两个月的训练记录也看不到了。",
+    "author": "小雨",
+    "createdAt": "2026-07-20T10:00:00Z"
+  },
+  {
+    "id": "rv-008",
+    "rating": 4,
+    "version": "3.2.0",
+    "title": "进度同步正常",
+    "text": "换手机后登录账号，训练历史和连续打卡都恢复了。",
+    "author": "陈晨",
+    "createdAt": "2026-08-05T10:00:00Z"
+  },
+  {
+    "id": "rv-009",
+    "rating": 1,
+    "version": "3.2.0",
+    "title": "Crash on launch",
+    "text": "The app closes immediately after the logo on my iPhone 14 running iOS 18.",
+    "author": "Chris",
+    "createdAt": "2026-08-06T03:10:00Z"
+  },
+  {
+    "id": "rv-010",
+    "rating": 5,
+    "version": "3.2.0",
+    "title": "Stable after update",
+    "text": "No crashes in ten workouts since installing version 3.2.0.",
+    "author": "Sam",
+    "createdAt": "2026-08-06T04:15:00Z"
+  },
+  {
+    "id": "rv-011",
+    "rating": 2,
+    "version": "3.2.0",
+    "title": "Search is confusing",
+    "text": "Filters reset whenever I open a workout detail and go back to the search list.",
+    "author": "Nora",
+    "createdAt": "2026-08-07"
+  },
+  {
+    "id": "rv-012",
+    "rating": 4,
+    "version": "3.2.0",
+    "title": "Search works well",
+    "text": "The duration and equipment filters stay selected when I return from a workout.",
+    "author": "Owen",
+    "createdAt": "2026-08-07"
+  },
+  {
+    "id": "rv-013",
+    "rating": 1,
+    "version": "3.2.0",
+    "title": "Notifications ignore settings",
+    "text": "I disabled reminders but still receive a workout notification every morning.",
+    "author": "Pat",
+    "createdAt": "2026-08-08"
+  },
+  {
+    "id": "rv-014",
+    "rating": 5,
+    "version": "3.2.0",
+    "title": "Reminder controls are reliable",
+    "text": "Turning reminders off stopped all notifications immediately.",
+    "author": "Robin",
+    "createdAt": "2026-08-08"
+  },
+  {
+    "id": "rv-015",
+    "rating": 2,
+    "version": "3.2.0",
+    "title": "太耗电",
+    "text": "完成二十分钟训练后电量下降了百分之二十五，手机也明显发热。",
+    "author": "王宁",
+    "createdAt": "2026-08-09"
+  },
+  {
+    "id": "rv-016",
+    "rating": 5,
+    "version": "3.2.0",
+    "title": "Battery use is low",
+    "text": "A thirty-minute workout used only four percent battery on my phone.",
+    "author": "Lee",
+    "createdAt": "2026-08-09"
+  },
+  {
+    "id": "rv-017",
+    "rating": 2,
+    "version": "3.2.0",
+    "title": "Accessibility labels missing",
+    "text": "VoiceOver reads several workout controls only as button, so I cannot tell what they do.",
+    "author": "Casey",
+    "createdAt": "2026-08-10"
+  },
+  {
+    "id": "rv-018",
+    "rating": 4,
+    "version": "3.2.0",
+    "title": "VoiceOver improved",
+    "text": "Most workout controls now have useful VoiceOver labels and clear focus order.",
+    "author": "Drew",
+    "createdAt": "2026-08-10"
+  },
+  {
+    "id": "rv-019",
+    "rating": 3,
+    "version": "3.2.0",
+    "title": "内容不错但推荐重复",
+    "text": "动作讲解清楚，不过首页连续三天推荐了同一组训练。",
+    "author": "阿杰",
+    "createdAt": "2026-08-11"
+  },
+  {
+    "id": "rv-020",
+    "rating": 4,
+    "version": "3.2.0",
+    "title": "Recommendations feel varied",
+    "text": "The home screen gives me different workouts based on recent activity.",
+    "author": "Riley",
+    "createdAt": "2026-08-11"
+  },
+  {
+    "id": "rv-003",
+    "rating": 5,
+    "version": "3.2.0",
+    "title": "Duplicate source ID",
+    "text": "This record intentionally reuses rv-003 and should be removed by ID deduplication.",
+    "author": "Duplicate",
+    "createdAt": "2026-08-12"
+  },
+  {
+    "id": "rv-022",
+    "rating": 1,
+    "version": "3.2.0",
+    "title": "订阅费用不透明",
+    "text": "免费试用结束后直接扣费，我在确认页没有看清自动续费说明。",
+    "author": "Another user",
+    "createdAt": "2026-08-12"
+  },
+  {
+    "id": "rv-023",
+    "rating": 3,
+    "version": "3.2.0",
+    "title": "Empty body",
+    "text": "",
+    "author": "Empty",
+    "createdAt": "2026-08-12"
+  },
+  {
+    "id": "rv-024",
+    "rating": 4,
+    "version": "3.2.0",
+    "title": "Whitespace body",
+    "text": "   \n\t  ",
+    "author": "Blank",
+    "createdAt": "2026-08-12"
+  },
+  {
+    "id": "rv-025",
+    "rating": 6,
+    "version": "3.2.0",
+    "title": "Invalid high rating",
+    "text": "This row has a rating outside the supported range.",
+    "author": "Invalid",
+    "createdAt": "2026-08-12"
+  },
+  {
+    "id": "rv-026",
+    "rating": 0,
+    "version": "3.2.0",
+    "title": "Invalid zero rating",
+    "text": "This row also has an invalid rating.",
+    "author": "Invalid",
+    "createdAt": "2026-08-12"
+  },
+  {
+    "id": "rv-027",
+    "rating": "five",
+    "version": "3.2.0",
+    "title": "Invalid text rating",
+    "text": "The score is written as a word and should be filtered.",
+    "author": "Invalid",
+    "createdAt": "2026-08-12"
+  },
+  {
+    "rating": 4,
+    "version": "3.2.0",
+    "title": "缺少评论 ID",
+    "text": "这条评论没有来源 ID，系统应该生成稳定的哈希 ID。",
+    "author": "匿名用户",
+    "createdAt": "2026-08-13"
+  },
+  {
+    "id": "rv-029",
+    "rating": 3,
+    "version": "3.2.0",
+    "title": "Invalid date but valid review",
+    "text": "The date is malformed, but this review should remain available for analysis.",
+    "author": "Date test",
+    "createdAt": "not-a-date"
+  },
+  {
+    "id": "rv-030",
+    "rating": 5,
+    "version": "3.2.0",
+    "title": "训练完成 🎉",
+    "text": "动作提示很清楚，emoji 和中文都应该被完整保留 💪🏽。",
+    "author": "健身新人",
+    "createdAt": "2026-08-13"
+  },
+  {
+    "id": "rv-031",
+    "rating": 5,
+    "version": "3.2.0",
+    "title": "Suscripción clara",
+    "text": "El precio y la fecha de renovación aparecen claramente antes de confirmar.",
+    "author": "Lucía",
+    "createdAt": "2026-08-14"
+  },
+  {
+    "id": "rv-032",
+    "rating": 1,
+    "version": "3.2.0",
+    "title": "Cobro inesperado",
+    "text": "Me cobraron después de la prueba y no vi un aviso claro sobre la renovación.",
+    "author": "Mateo",
+    "createdAt": "2026-08-14"
+  },
+  {
+    "id": "rv-033",
+    "rating": 5,
+    "version": "3.2.0",
+    "title": "Application très stable",
+    "text": "Aucun plantage pendant mes séances cette semaine.",
+    "author": "Chloé",
+    "createdAt": "2026-08-15"
+  },
+  {
+    "id": "rv-034",
+    "rating": 1,
+    "version": "3.2.0",
+    "title": "Plantage fréquent",
+    "text": "L'application se ferme dès que je lance une séance téléchargée.",
+    "author": "Louis",
+    "createdAt": "2026-08-15"
+  },
+  {
+    "id": "rv-035",
+    "rating": 5,
+    "version": "3.2.0",
+    "title": "音声案内は正確です",
+    "text": "カウントダウンと音声案内が毎回ぴったり合っています。",
+    "author": "葵",
+    "createdAt": "2026-08-16"
+  },
+  {
+    "id": "rv-036",
+    "rating": 2,
+    "version": "3.2.0",
+    "title": "音声が遅れます",
+    "text": "タイマーが切り替わった後に音声案内が流れることがあります。",
+    "author": "蓮",
+    "createdAt": "2026-08-16"
+  },
+  {
+    "id": "rv-037",
+    "rating": 5,
+    "version": "3.2.0",
+    "title": "기록 동기화가 잘 됩니다",
+    "text": "새 휴대폰에서도 로그인하니 운동 기록이 모두 복원되었습니다.",
+    "author": "서준",
+    "createdAt": "2026-08-17"
+  },
+  {
+    "id": "rv-038",
+    "rating": 1,
+    "version": "3.2.0",
+    "title": "운동 기록이 사라졌어요",
+    "text": "업데이트 후 지난달 운동 기록과 연속 기록이 없어졌습니다.",
+    "author": "지우",
+    "createdAt": "2026-08-17"
+  },
+  {
+    "id": "rv-039",
+    "rating": 5,
+    "version": "3.2.0",
+    "title": "التطبيق سهل الاستخدام",
+    "text": "التنقل واضح وتمكنت من بدء التمرين بسرعة.",
+    "author": "ليلى",
+    "createdAt": "2026-08-18"
+  },
+  {
+    "id": "rv-040",
+    "rating": 2,
+    "version": "3.2.0",
+    "title": "القوائم مربكة",
+    "text": "من الصعب العثور على سجل التمارين وإعدادات الاشتراك.",
+    "author": "عمر",
+    "createdAt": "2026-08-18"
+  },
+  {
+    "id": "rv-041",
+    "rating": 2,
+    "version": "3.2.0",
+    "title": "Kein PDF-Export",
+    "text": "Ich brauche einen PDF-Export für meinen Trainer.",
+    "author": "Mia",
+    "createdAt": "2026-08-18"
+  },
+  {
+    "id": "rv-042",
+    "rating": 3,
+    "version": "3.2.0",
+    "title": "Maybe battery drain",
+    "text": "My battery seemed lower today, but I also used GPS and music, so I am not sure the app caused it.",
+    "author": "Uncertain",
+    "createdAt": "2026-08-18"
+  },
+  {
+    "id": "rv-043",
+    "rating": 4,
+    "version": "3.2.0",
+    "title": "Subscription is fair",
+    "text": "The annual plan is worth it for me because new workouts are added often.",
+    "author": "Value user",
+    "createdAt": "2026-08-19"
+  },
+  {
+    "id": "rv-044",
+    "rating": 1,
+    "version": "3.2.0",
+    "title": "Subscription is too expensive",
+    "text": "The annual price is higher than similar fitness apps and does not feel worthwhile.",
+    "author": "Price user",
+    "createdAt": "2026-08-19"
+  },
+  {
+    "id": "rv-045",
+    "rating": 1,
+    "version": "3.0.0",
+    "title": "Old version crashes",
+    "text": "Version 3.0.0 crashed whenever I opened downloaded workouts.",
+    "author": "Old version",
+    "createdAt": "2026-06-01"
+  },
+  {
+    "id": "rv-046",
+    "rating": 5,
+    "version": "3.2.0",
+    "title": "Download crash fixed",
+    "text": "Downloaded workouts open normally after updating to version 3.2.0.",
+    "author": "Updated user",
+    "createdAt": "2026-08-19"
+  },
+  {
+    "id": "rv-047",
+    "rating": 4,
+    "version": " 3.2.0 ",
+    "title": "  进度同步正常 ",
+    "text": "换手机后登录账号，\n训练历史和连续打卡都恢复了。",
+    "author": "Whitespace duplicate",
+    "createdAt": "2026-08-19"
+  },
+  {
+    "id": "rv-048",
+    "rating": 2,
+    "version": "3.2.0",
+    "title": "Progress restored only partly",
+    "text": "My workout history returned after login, but the weekly streak is still missing.",
+    "author": "Partial restore",
+    "createdAt": "2026-08-20"
+  },
+  {
+    "id": "rv-049",
+    "rating": 4,
+    "version": "3.2.0",
+    "title": "Progress restored after retry",
+    "text": "My workout history was missing at first, then appeared after signing out and back in.",
+    "author": "Retry user",
+    "createdAt": "2026-08-20"
+  },
+  {
+    "id": "rv-050",
+    "rating": 3,
+    "version": "3.2.0",
+    "title": "",
+    "text": "It works, I guess. I only used one short workout and do not have enough experience to judge.",
+    "author": "First-time user",
+    "createdAt": "2026-08-20"
+  }
+]

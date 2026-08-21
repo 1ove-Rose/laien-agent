@@ -3,6 +3,7 @@ const fs = require("fs");
 const path = require("path");
 const { ApiError, collectReviews } = require("./lib/apple-reviews");
 const { cleanReviews } = require("./lib/review-cleaner");
+const { importReviews } = require("./lib/review-importer");
 
 const port = Number(process.env.PORT || 8765);
 const defaultAgentServiceUrl = process.env.AGENT_SERVICE_URL || "http://127.0.0.1:8770";
@@ -21,7 +22,7 @@ function sendJson(res, status, payload) {
   res.end(JSON.stringify(payload));
 }
 
-function readJsonBody(req) {
+function readJsonBody(req, maxBytes = 2 * 1024 * 1024) {
   return new Promise((resolve, reject) => {
     const chunks = [];
     let size = 0;
@@ -30,7 +31,7 @@ function readJsonBody(req) {
     req.on("data", (chunk) => {
       if (tooLarge) return;
       size += chunk.length;
-      if (size > 2 * 1024 * 1024) {
+      if (size > maxBytes) {
         tooLarge = true;
         return;
       }
@@ -38,7 +39,7 @@ function readJsonBody(req) {
     });
     req.on("end", () => {
       if (tooLarge) {
-        reject(new ApiError("REQUEST_TOO_LARGE", "请求内容不能超过 2 MB。", { status: 413 }));
+        reject(new ApiError("REQUEST_TOO_LARGE", "请求内容超过允许上限。", { status: 413 }));
         return;
       }
       try {
@@ -184,13 +185,17 @@ async function handleApi(req, res, pathname, agentServiceUrl) {
   }
 
   try {
-    const body = await readJsonBody(req);
+    const body = await readJsonBody(req, pathname === "/api/reviews/import" ? 3 * 1024 * 1024 : 2 * 1024 * 1024);
     if (pathname === "/api/reviews/collect") {
       sendJson(res, 200, await collectReviews(body));
       return;
     }
     if (pathname === "/api/reviews/clean") {
       sendJson(res, 200, cleanReviews(body));
+      return;
+    }
+    if (pathname === "/api/reviews/import") {
+      sendJson(res, 200, importReviews(body));
       return;
     }
     sendJson(res, 404, {

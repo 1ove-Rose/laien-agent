@@ -1,8 +1,10 @@
 import asyncio
 import json
 import os
+from pathlib import Path
 from typing import Any
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
@@ -13,7 +15,13 @@ from .schemas import AnalysisRunRequest, RunEvent
 from .state import initial_state
 
 
-RUN_TIMEOUT_SECONDS = float(os.getenv("AGENT_RUN_TIMEOUT_SECONDS", "180"))
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ENV = PROJECT_ROOT / ".env"
+EXAMPLE_ENV = PROJECT_ROOT / ".env.example"
+CONFIG_ENV = PROJECT_ENV if PROJECT_ENV.exists() else EXAMPLE_ENV
+load_dotenv(CONFIG_ENV, override=False)
+
+RUN_TIMEOUT_SECONDS = float(os.getenv("AGENT_RUN_TIMEOUT_SECONDS", "900"))
 
 app = FastAPI(title="App Review Insights Agent Service")
 
@@ -43,28 +51,43 @@ async def run_analysis(request: Request):
     async def event_stream():
         latest_state = initial_state(run_request)
         try:
+            yield sse(make_event("stage_started", "多 Agent 编排", "多 Agent 分析任务已启动。"))
+            yield sse(make_event(
+                "artifact",
+                "多 Agent 编排",
+                "已确认本次分析的数据范围和限制。",
+                {"dataLimitations": latest_state.get("dataLimitations", [])},
+            ))
             llm = create_llm()
             graph = build_graph(llm)
-            yield sse(make_event("stage_started", "多 Agent 编排", "多 Agent 分析任务已启动。"))
 
-            async with asyncio.timeout(RUN_TIMEOUT_SECONDS):
-                async for mode, chunk in graph.astream(latest_state, stream_mode=["custom", "updates"]):
-                    if await request.is_disconnected():
-                        break
-                    if mode == "custom":
-                        yield sse(RunEvent.model_validate(chunk).model_dump())
-                    elif mode == "updates":
-                        for update in chunk.values():
-                            if isinstance(update, dict):
-                                latest_state.update(update)
+            stream = graph.astream(latest_state, stream_mode=["custom", "updates"])
+            try:
+                async with asyncio.timeout(RUN_TIMEOUT_SECONDS):
+                    async for mode, chunk in stream:
+                        if await request.is_disconnected():
+                            return
+                        if mode == "custom":
+                            yield sse(RunEvent.model_validate(chunk).model_dump())
+                        elif mode == "updates":
+                            for update in chunk.values():
+                                if isinstance(update, dict):
+                                    latest_state.update(update)
+            finally:
+                await stream.aclose()
 
             completed = {
+                "analysisMode": latest_state.get("analysisMode", "balanced"),
                 "classifications": latest_state.get("classifications", []),
                 "insights": latest_state.get("findings", []),
+                "insightsBeforeRevision": latest_state.get("findingsBeforeRevision", []),
+                "insightsAfterRevision": latest_state.get("findings", []),
                 "requirements": latest_state.get("requirements", []),
                 "tests": latest_state.get("tests", []),
                 "validations": latest_state.get("validations", []),
                 "revisions": latest_state.get("revisions", []),
+                "rejectedFindings": latest_state.get("rejectedFindings", []),
+                "dataLimitations": latest_state.get("dataLimitations", []),
             }
             yield sse(make_event("completed", "多 Agent 编排", "多 Agent 分析完成。", completed))
         except TimeoutError as exc:
@@ -82,4 +105,3 @@ async def run_analysis(request: Request):
             "X-Accel-Buffering": "no",
         },
     )
-

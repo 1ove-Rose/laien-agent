@@ -3,6 +3,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from .errors import AgentRunError
+from .analysis_mode import resolve_analysis_mode
 
 
 class Review(BaseModel):
@@ -40,7 +41,10 @@ class Finding(BaseModel):
     supportCount: int
     confidence: str
     conflict: str = ""
+    conflictEvidenceIds: list[str] = Field(default_factory=list)
     version: str = "v0.1"
+    status: Literal["validated", "revised", "hypothesis", "rejected"] = "validated"
+    statusReason: str = ""
 
     @field_validator("supportCount")
     @classmethod
@@ -57,6 +61,8 @@ class Requirement(BaseModel):
     sourceFindingId: str
     acceptance: str
     version: str = "v0.1"
+    status: Literal["validated", "revised", "hypothesis"] = "validated"
+    statusReason: str = ""
 
 
 class TestCase(BaseModel):
@@ -67,6 +73,8 @@ class TestCase(BaseModel):
     steps: str
     expected: str
     version: str = "v0.1"
+    status: Literal["validated", "revised", "hypothesis"] = "validated"
+    statusReason: str = ""
 
 
 class ValidationResult(BaseModel):
@@ -90,10 +98,18 @@ class InsightResponse(BaseModel):
     findings: list[Finding]
 
 
+class FindingDecision(BaseModel):
+    findingId: str
+    action: Literal["accept", "revise", "hypothesis", "reject"]
+    reason: str
+    conflictEvidenceIds: list[str] = Field(default_factory=list)
+
+
 class CriticResponse(BaseModel):
     passed: bool
     validations: list[ValidationResult]
     revisionInstructions: str | None = None
+    decisions: list[FindingDecision] = Field(default_factory=list)
 
 
 class RequirementsResponse(BaseModel):
@@ -110,6 +126,10 @@ class AnalysisRunRequest(BaseModel):
     reviews: list[Review]
     collection: dict[str, Any] = Field(default_factory=dict)
     cleanReport: dict[str, Any] = Field(default_factory=dict)
+
+    @property
+    def analysisMode(self):
+        return resolve_analysis_mode(self.goal)
 
     @field_validator("appId")
     @classmethod
@@ -145,6 +165,7 @@ class RunEvent(BaseModel):
     type: Literal[
         "stage_started",
         "stage_completed",
+        "progress",
         "validation",
         "revision",
         "artifact",
@@ -155,4 +176,3 @@ class RunEvent(BaseModel):
     stage: str
     message: str
     data: dict[str, Any] = Field(default_factory=dict)
-

@@ -10,6 +10,8 @@ from .state import AnalysisState
 
 
 def route_after_critic(state):
+    if state.get("analysisMode") == "positive" and state.get("criticPassed"):
+        return "insights_only"
     if state.get("criticPassed"):
         return "prd"
     if state.get("iteration", 0) < 1:
@@ -20,23 +22,23 @@ def route_after_critic(state):
 def build_graph(llm):
     graph = StateGraph(AnalysisState)
 
-    async def classification_node(state, writer=None):
-        return await classification_agent(state, llm, writer)
+    async def classification_node(state):
+        return await classification_agent(state, llm)
 
-    async def insight_node(state, writer=None):
-        return await insight_agent(state, llm, writer)
+    async def insight_node(state):
+        return await insight_agent(state, llm)
 
-    async def critic_node(state, writer=None):
-        return await evidence_critic(state, llm, writer)
+    async def critic_node(state):
+        return await evidence_critic(state, llm)
 
-    async def revision_node(state, writer=None):
-        return await insight_revision_agent(state, llm, writer)
+    async def revision_node(state):
+        return await insight_revision_agent(state, llm)
 
-    async def prd_node(state, writer=None):
-        return await prd_planner(state, llm, writer)
+    async def prd_node(state):
+        return await prd_planner(state, llm)
 
-    async def test_node(state, writer=None):
-        return await test_designer(state, llm, writer)
+    async def test_node(state):
+        return await test_designer(state, llm)
 
     graph.add_node("classification_agent", classification_node)
     graph.add_node("insight_agent", insight_node)
@@ -53,7 +55,12 @@ def build_graph(llm):
     graph.add_conditional_edges(
         "evidence_critic",
         route_after_critic,
-        {"prd": "prd_planner", "revise": "insight_revision_agent", "fail": "critic_failure"},
+        {
+            "prd": "prd_planner",
+            "revise": "insight_revision_agent",
+            "fail": "critic_failure",
+            "insights_only": "traceability_validator",
+        },
     )
     graph.add_edge("insight_revision_agent", "evidence_critic")
     graph.add_edge("critic_failure", END)

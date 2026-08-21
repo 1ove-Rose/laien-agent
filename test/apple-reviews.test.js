@@ -226,44 +226,82 @@ test("keeps earlier pages when a later page fails", async (t) => {
   assert.match(result.collection.warnings.join(" "), /第 2 页采集失败/);
 });
 
-test("uses fresh cache and falls back to stale cache when the network fails", async (t) => {
+test("always uses the live response even when a cache file exists", async (t) => {
   const cacheDir = await tempCache(t);
   const input = { appUrl: "https://apps.apple.com/us/app/example/id123", maxReviews: 1 };
-  let networkCalls = 0;
+  await fs.writeFile(
+    path.join(cacheDir, "us-123-page-1.json"),
+    JSON.stringify({
+      fetchedAt: "2026-08-19T00:00:00Z",
+      data: makePage(1, 1)
+    }),
+    "utf8"
+  );
 
-  await collectReviews(input, {
-    cacheDir,
-    now: () => Date.parse("2026-08-19T00:00:00Z"),
-    sleepImpl: async () => {},
-    fetchImpl: async () => {
-      networkCalls += 1;
-      return response(200, makePage(1, 1));
+  const result = await collectReviews(
+    input,
+    {
+      cacheDir,
+      now: () => Date.parse("2026-08-21T00:00:00Z"),
+      sleepImpl: async () => {},
+      fetchImpl: async () => response(200, makePage(99, 1))
     }
-  });
+  );
 
-  const fresh = await collectReviews(input, {
-    cacheDir,
-    now: () => Date.parse("2026-08-19T00:30:00Z"),
-    sleepImpl: async () => {},
-    fetchImpl: async () => {
-      throw new Error("fresh cache should avoid the network");
-    }
-  });
-  assert.equal(fresh.collection.fromCache, true);
-  assert.equal(networkCalls, 1);
+  assert.equal(result.reviews[0].id, "99");
+  assert.equal(result.collection.fromCache, false);
+  assert.equal(result.collection.staleCache, false);
+});
 
-  const stale = await collectReviews(input, {
-    cacheDir,
-    cacheTtlMs: 1,
-    maxRetries: 0,
-    now: () => Date.parse("2026-08-19T02:00:00Z"),
-    sleepImpl: async () => {},
-    fetchImpl: async () => {
-      throw new Error("offline");
+test("does not fall back to cache when the live RSS feed is empty", async (t) => {
+  const cacheDir = await tempCache(t);
+  await fs.writeFile(
+    path.join(cacheDir, "us-123-page-1.json"),
+    JSON.stringify({
+      fetchedAt: "2026-08-18T00:00:00Z",
+      data: makePage(1, 1)
+    }),
+    "utf8"
+  );
+
+  const result = await collectReviews(
+    { appUrl: "https://apps.apple.com/us/app/example/id123", maxReviews: 1 },
+    {
+      cacheDir,
+      now: () => Date.parse("2026-08-21T00:00:00Z"),
+      sleepImpl: async () => {},
+      fetchImpl: async () => response(200, { feed: {} })
     }
-  });
-  assert.equal(stale.collection.staleCache, true);
-  assert.match(stale.collection.warnings.join(" "), /过期缓存/);
+  );
+
+  assert.equal(result.reviews.length, 0);
+  assert.equal(result.collection.fromCache, false);
+  assert.equal(result.collection.staleCache, false);
+  assert.match(result.collection.warnings.join(" "), /实际获得 0 条/);
+});
+
+test("does not fall back to cache when the live request fails", async (t) => {
+  const cacheDir = await tempCache(t);
+  await fs.writeFile(
+    path.join(cacheDir, "us-123-page-1.json"),
+    JSON.stringify({ fetchedAt: "2026-08-18T00:00:00Z", data: makePage(1, 1) }),
+    "utf8"
+  );
+
+  await assert.rejects(
+    collectReviews(
+      { appUrl: "https://apps.apple.com/us/app/example/id123", maxReviews: 1 },
+      {
+        cacheDir,
+        maxRetries: 0,
+        sleepImpl: async () => {},
+        fetchImpl: async () => {
+          throw new Error("offline");
+        }
+      }
+    ),
+    { code: "APPLE_REQUEST_FAILED" }
+  );
 });
 
 test("ignores a fresh empty cache page and retries the Apple feed", async (t) => {

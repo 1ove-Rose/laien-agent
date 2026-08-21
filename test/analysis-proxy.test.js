@@ -61,3 +61,23 @@ test("returns a structured error when the Python agent service is unavailable", 
   assert.equal(payload.error.retryable, true);
 });
 
+test("imports review JSON through the Node API", async (t) => {
+  const app = createServer();
+  const appPort = await listen(app);
+  t.after(() => close(app));
+
+  const response = await fetch(`http://127.0.0.1:${appPort}/api/reviews/import`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      fileName: "reviews.json",
+      content: JSON.stringify([{ id: "r1", rating: 5, text: "great" }])
+    })
+  });
+  const payload = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.import.format, "json");
+  assert.match(payload.appId, /^\d{18}$/);
+  assert.equal(payload.reviews[0].id, "r1");
+});

@@ -14,6 +14,8 @@ const state = {
   cleanReport: null,
   categories: [],
   insights: [],
+  insightsBeforeRevision: [],
+  insightsAfterRevision: [],
   requirements: [],
   tests: [],
   stageStatuses: pipeline.map(() => "pending"),
@@ -22,13 +24,23 @@ const state = {
   validations: [],
   errors: [],
   revisions: [],
+  rejectedFindings: [],
+  analysisMode: "negative",
+  inputMode: "apple",
   currentStage: -1,
   running: false
 };
 
 const els = {
   form: document.querySelector("#analysis-form"),
+  appleInputPanel: document.querySelector("#apple-input-panel"),
+  appleOptionsPanel: document.querySelector("#apple-options-panel"),
+  appleExamplesPanel: document.querySelector("#apple-examples-panel"),
+  fileInputPanel: document.querySelector("#file-input-panel"),
+  inputModeButtons: document.querySelectorAll(".input-mode"),
   appUrlInput: document.querySelector("#app-url"),
+  reviewFileInput: document.querySelector("#review-file"),
+  importFileError: document.querySelector("#import-file-error"),
   appUrlError: document.querySelector("#app-url-error"),
   formAlert: document.querySelector("#form-alert"),
   submitButton: document.querySelector(".primary-action"),
@@ -41,6 +53,7 @@ const els = {
   validationList: document.querySelector("#validation-list"),
   revisionList: document.querySelector("#revision-list"),
   artifactNote: document.querySelector("#artifact-note"),
+  dataLimitations: document.querySelector("#data-limitations"),
   validationMetrics: {
     passed: document.querySelector("#validation-passed"),
     errors: document.querySelector("#validation-errors"),
@@ -64,11 +77,14 @@ const els = {
   cleanedReviewsTable: document.querySelector("#cleaned-reviews-table"),
   categoryTable: document.querySelector("#category-table"),
   insightList: document.querySelector("#insight-list"),
+  rejectedFindingList: document.querySelector("#rejected-finding-list"),
   prdList: document.querySelector("#prd-list"),
   testList: document.querySelector("#test-list")
 };
 
 function init() {
+  state.analysisMode = inferAnalysisMode(document.querySelector("#analysis-goal")?.value || "");
+  setDeliverableVisibility();
   if (window.location.protocol === "file:") {
     els.pipelineNote.textContent = "真实采集需要通过 node serve.js 启动本地服务。";
     els.artifactNote.textContent = "当前为 file:// 模式，后端采集与清洗接口不可用。";
@@ -94,12 +110,47 @@ function init() {
     });
   });
 
+  els.inputModeButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      state.inputMode = button.dataset.inputMode;
+      renderInputMode();
+      clearAlert();
+      clearFieldError();
+    });
+  });
+
+  document.querySelector("#analysis-goal").addEventListener("input", () => {
+    state.analysisMode = inferAnalysisMode(document.querySelector("#analysis-goal").value);
+    setDeliverableVisibility();
+    renderPipeline();
+  });
+
   els.appUrlInput.addEventListener("input", () => {
     clearFieldError();
     clearAlert();
   });
 
+  els.reviewFileInput.addEventListener("change", clearImportFileError);
+
   els.form.addEventListener("submit", runAnalysis);
+  renderInputMode();
+}
+
+function renderInputMode() {
+  const isFile = state.inputMode === "file";
+  els.appleInputPanel.hidden = isFile;
+  els.appleOptionsPanel.hidden = isFile;
+  els.appleExamplesPanel.hidden = isFile;
+  els.fileInputPanel.hidden = !isFile;
+  els.appUrlInput.required = !isFile;
+  els.reviewFileInput.required = isFile;
+  els.inputModeButtons.forEach((button) => button.classList.toggle("is-active", button.dataset.inputMode === state.inputMode));
+}
+
+function clearImportFileError() {
+  els.importFileError.textContent = "";
+  els.importFileError.hidden = true;
+  clearAlert();
 }
 
 async function runAnalysis(event) {
@@ -110,18 +161,31 @@ async function runAnalysis(event) {
   clearFieldError();
   let validatedAppId;
   try {
-    validatedAppId = parseAppId(els.appUrlInput.value);
+    if (state.inputMode === "file") {
+      validateImportedInput();
+      validatedAppId = null;
+    } else {
+      validatedAppId = parseAppId(els.appUrlInput.value);
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    setFieldError(message);
-    showAlert("App Store 链接无效", message, "error");
+    if (state.inputMode === "file") {
+      els.importFileError.textContent = message;
+      els.importFileError.hidden = false;
+      showAlert("导入文件无效", message, "error");
+    } else {
+      setFieldError(message);
+      showAlert("App Store 链接无效", message, "error");
+    }
     setRunStatus("输入错误", "error");
-    els.pipelineNote.textContent = "请先修正 App Store 链接后再执行分析。";
-    els.artifactNote.textContent = "链接校验未通过，尚未开始采集。";
+    els.pipelineNote.textContent = "请先修正输入后再执行分析。";
+    els.artifactNote.textContent = "输入校验未通过，尚未开始采集。";
     return;
   }
 
   resetRunState();
+  state.analysisMode = inferAnalysisMode(document.querySelector("#analysis-goal").value);
+  setDeliverableVisibility();
   state.running = true;
   setFormRunning(true);
   setRunStatus("分析中", "running");
@@ -138,25 +202,30 @@ async function runAnalysis(event) {
     }
 
     await runStage(0, "raw", async () => {
-      const maxReviews = Number(document.querySelector("#max-reviews").value);
-      const countryLabel = selectedCountryLabel();
       addValidation(
         "pass",
         "输入参数有效",
-        `已识别 App ID ${validatedAppId}，目标采集数 ${maxReviews} 条。实际结果可能少于该值。`,
+        state.inputMode === "file"
+          ? "已识别 JSON/CSV 评论文件，将使用内部数据集标识进行追踪。"
+          : `已识别 App ID ${validatedAppId}，目标采集数 ${Number(document.querySelector("#max-reviews").value)} 条。实际结果可能少于该值。`,
         "范围确认"
       );
-      return `App ID ${validatedAppId} · ${countryLabel} · 目标采集 ${maxReviews} 条`;
+      return state.inputMode === "file"
+        ? `文件导入 · ${els.reviewFileInput.files[0].name}`
+        : `App ID ${validatedAppId} · ${selectedCountryLabel()} · 目标采集 ${Number(document.querySelector("#max-reviews").value)} 条`;
     });
 
     await runStage(1, "raw", async () => {
-      const payload = await apiRequest("/api/reviews/collect", {
-        appUrl: els.appUrlInput.value,
-        country: document.querySelector("#country").value,
-        maxReviews: Number(document.querySelector("#max-reviews").value)
-      });
+      const payload = state.inputMode === "file"
+        ? await importReviewFile()
+        : await apiRequest("/api/reviews/collect", {
+            appUrl: els.appUrlInput.value,
+            country: document.querySelector("#country").value,
+            maxReviews: Number(document.querySelector("#max-reviews").value)
+          });
       state.reviews = payload.reviews;
-      state.collection = payload.collection;
+      if (state.inputMode === "file") validatedAppId = payload.appId;
+      state.collection = payload.collection || payload.import;
       const validIds = state.reviews.filter((review) => review.id).length;
       addValidation(
         "pass",
@@ -164,9 +233,12 @@ async function runAnalysis(event) {
         `${validIds}/${state.reviews.length} 条评论包含可追溯 ID。`,
         "评论采集"
       );
-      payload.collection.warnings.forEach((warning) => {
+      (payload.collection?.warnings || payload.import?.warnings || []).forEach((warning) => {
         addValidation("revised", "采集限制或回退", warning, "评论采集");
       });
+      if (state.inputMode === "file") {
+        return `文件导入（${payload.import.format.toUpperCase()}） · ${payload.import.fileName} · 实际 ${state.reviews.length} 条`;
+      }
       const source = payload.collection.staleCache
         ? "Apple RSS（含过期缓存）"
         : payload.collection.fromCache
@@ -177,22 +249,30 @@ async function runAnalysis(event) {
 
     if (state.reviews.length === 0) {
       setRunStatus("无可用评论", "complete");
-      els.pipelineNote.textContent = `${selectedCountryLabel()} App Store RSS 当前没有返回可用评论，任务已停止在采集阶段。`;
+      els.pipelineNote.textContent = state.inputMode === "file"
+        ? "导入文件中没有可用评论，任务已停止在采集阶段。"
+        : `${selectedCountryLabel()} App Store RSS 当前没有返回可用评论，任务已停止在采集阶段。`;
       els.artifactNote.textContent = "没有生成后续分析产物；系统不会使用样例或伪造评论补齐结果。";
       showAlert(
         "未采集到可用评论",
-        `${selectedCountryLabel()}地区的公开 Apple RSS 当前没有为该 App 返回评论。可以切换国家/地区、稍后重试，或更换有公开评论的 App。`
+        state.inputMode === "file"
+          ? "导入文件中没有可用评论，请检查文件格式、表头和正文内容。"
+          : `${selectedCountryLabel()}地区的公开 Apple RSS 当前没有为该 App 返回评论。可以切换国家/地区、稍后重试，或更换有公开评论的 App。`
       );
       addActivity(
         "system",
         "采集结束",
-        `${selectedCountryLabel()} App Store RSS 返回 0 条可用评论，后续清洗、分类、洞察、PRD 和测试阶段已跳过。`,
+        state.inputMode === "file"
+          ? "导入文件返回 0 条可用评论，后续清洗和分析阶段已跳过。"
+          : `${selectedCountryLabel()} App Store RSS 返回 0 条可用评论，后续清洗和分析阶段已跳过。`,
         "评论采集"
       );
       addValidation(
         "revised",
         "无可用评论",
-        "当前所选地区数据源没有返回评论；请稍后重试、清理缓存后重试，或更换有公开评论的 App。",
+        state.inputMode === "file"
+          ? "当前文件没有可用评论，请检查文件内容。"
+          : "当前所选地区数据源没有返回评论；请稍后重试、清理缓存后重试，或更换有公开评论的 App。",
         "评论采集"
       );
       selectTab("raw");
@@ -225,7 +305,7 @@ async function runAnalysis(event) {
     });
 
     await streamAgentAnalysis({
-      appId: parseAppId(document.querySelector("#app-url").value),
+      appId: validatedAppId,
       goal: document.querySelector("#analysis-goal").value,
       reviews: state.cleaned,
       collection: state.collection,
@@ -234,16 +314,23 @@ async function runAnalysis(event) {
 
     state.currentStage = -1;
     setRunStatus("已完成", "complete");
-    els.pipelineNote.textContent = "全部阶段已完成，中间产物、验证记录和最终初稿均可审查。";
-    els.artifactNote.textContent = "交付完成：所有产物均保留来源引用和阶段验证结果。";
+    const positiveMode = state.analysisMode === "positive";
+    els.pipelineNote.textContent = positiveMode
+      ? "高分评论分析完成，产品优点和证据链已生成。"
+      : "全部阶段已完成，中间产物、验证记录和最终初稿均可审查。";
+    els.artifactNote.textContent = positiveMode
+      ? "分析完成：产品优点均保留来源评论和证据验证结果。"
+      : "交付完成：所有产物均保留来源引用和阶段验证结果。";
     addActivity(
       "success",
       "最终交付已生成",
-      `交付 ${state.insights.length} 条洞察、${state.requirements.length} 条 PRD 初稿和 ${state.tests.length} 条测试用例初稿。`,
+      positiveMode
+        ? `交付 ${state.categories.length} 条分类和 ${state.insights.length} 条产品优点洞察；本目标不生成 PRD 或测试用例。`
+        : `交付 ${state.insights.length} 条洞察、${state.requirements.length} 条 PRD 初稿和 ${state.tests.length} 条测试用例初稿。`,
       "任务"
     );
     addActivity("success", "错误检查完成", "本次运行未发现阻断错误。", "任务");
-    selectTab("tests");
+    selectTab(positiveMode ? "insights" : "tests");
   } catch (error) {
     const stage = pipeline[state.currentStage]?.name || "任务";
     state.errors.push({
@@ -284,6 +371,8 @@ async function runStage(index, tabName, task) {
 }
 
 async function streamAgentAnalysis(body) {
+  state.analysisMode = inferAnalysisMode(body.goal);
+  setDeliverableVisibility();
   state.currentStage = 3;
   state.stageStatuses[3] = "running";
   selectTab("categories");
@@ -377,6 +466,12 @@ function applyAgentEvent(event) {
     els.pipelineNote.textContent = event.message;
     addActivity("stage", `${event.stage}开始`, event.message, event.stage);
     selectAgentTab(event.stage);
+  } else if (event.type === "progress") {
+    if (stageIndex >= 0) {
+      state.stageStatuses[stageIndex] = "running";
+      state.stageOutputs[stageIndex] = event.message;
+    }
+    addActivity("system", "模型处理中", event.message, event.stage);
   } else if (event.type === "stage_completed") {
     if (stageIndex >= 0) {
       state.stageStatuses[stageIndex] = "done";
@@ -405,10 +500,12 @@ function applyAgentEvent(event) {
     applyAgentArtifact(event.data || {});
     state.stageStatuses[3] = "done";
     state.stageStatuses[4] = "done";
-    state.stageStatuses[5] = "done";
+    state.stageStatuses[5] = state.analysisMode === "positive" ? "skipped" : "done";
     state.stageOutputs[3] ||= `${state.categories.length} 条分类结果`;
     state.stageOutputs[4] ||= `${state.insights.length} 条洞察与验证结果`;
-    state.stageOutputs[5] ||= `${state.requirements.length} 条 PRD 初稿 · ${state.tests.length} 条测试用例初稿`;
+    state.stageOutputs[5] ||= state.analysisMode === "positive"
+      ? "当前目标只需要产品优点洞察，不生成 PRD 或测试用例"
+      : `${state.requirements.length} 条 PRD 初稿 · ${state.tests.length} 条测试用例初稿`;
     addActivity("success", event.message, "多 Agent 服务已返回最终产物。", event.stage);
   } else if (event.type === "error") {
     if (stageIndex >= 0) state.stageStatuses[stageIndex] = "error";
@@ -419,12 +516,24 @@ function applyAgentEvent(event) {
 }
 
 function applyAgentArtifact(data) {
+  if (data.analysisMode) {
+    state.analysisMode = data.analysisMode;
+    setDeliverableVisibility();
+  }
   if (Array.isArray(data.classifications)) state.categories = data.classifications;
-  if (Array.isArray(data.insights)) state.insights = data.insights;
+  if (Array.isArray(data.insights)) {
+    state.insights = data.insights;
+    if (data.insightVersion === "before-revision") state.insightsBeforeRevision = data.insights;
+    if (data.insightVersion === "after-revision") state.insightsAfterRevision = data.insights;
+  }
+  if (Array.isArray(data.insightsBeforeRevision)) state.insightsBeforeRevision = data.insightsBeforeRevision;
+  if (Array.isArray(data.insightsAfterRevision)) state.insightsAfterRevision = data.insightsAfterRevision;
   if (Array.isArray(data.requirements)) state.requirements = data.requirements;
   if (Array.isArray(data.tests)) state.tests = data.tests;
   if (Array.isArray(data.validations)) state.validations = mergeRecords(state.validations, data.validations);
   if (Array.isArray(data.revisions)) state.revisions = mergeRecords(state.revisions, data.revisions);
+  if (Array.isArray(data.rejectedFindings)) state.rejectedFindings = mergeRecords(state.rejectedFindings, data.rejectedFindings);
+  if (Array.isArray(data.dataLimitations)) renderDataLimitations(data.dataLimitations);
 }
 
 function mergeRecords(existing, incoming) {
@@ -443,7 +552,8 @@ function mergeRecords(existing, incoming) {
 function agentStageIndex(stage) {
   if (stage === "评论分类") return 3;
   if (stage === "洞察发现" || stage === "证据审查") return 4;
-  if (stage === "产品需求" || stage === "测试用例" || stage === "追溯验证") return 5;
+  if (stage === "追溯验证") return state.analysisMode === "positive" ? 4 : 5;
+  if (stage === "产品需求" || stage === "测试用例") return 5;
   if (stage === "多 Agent 编排") return 3;
   return -1;
 }
@@ -452,7 +562,8 @@ function selectAgentTab(stage) {
   if (stage === "评论分类") selectTab("categories");
   else if (stage === "洞察发现" || stage === "证据审查") selectTab("insights");
   else if (stage === "产品需求") selectTab("prd");
-  else if (stage === "测试用例" || stage === "追溯验证") selectTab("tests");
+  else if (stage === "测试用例") selectTab("tests");
+  else if (stage === "追溯验证") selectTab(state.analysisMode === "positive" ? "insights" : "tests");
 }
 
 function resetRunState() {
@@ -462,6 +573,8 @@ function resetRunState() {
   state.cleanReport = null;
   state.categories = [];
   state.insights = [];
+  state.insightsBeforeRevision = [];
+  state.insightsAfterRevision = [];
   state.requirements = [];
   state.tests = [];
   state.stageStatuses = pipeline.map(() => "pending");
@@ -470,6 +583,10 @@ function resetRunState() {
   state.validations = [];
   state.errors = [];
   state.revisions = [];
+  state.rejectedFindings = [];
+  els.dataLimitations.hidden = true;
+  els.dataLimitations.innerHTML = "";
+  state.analysisMode = inferAnalysisMode(document.querySelector("#analysis-goal")?.value || "");
   state.currentStage = -1;
 }
 
@@ -492,6 +609,14 @@ function addRevision(title, detail, stage) {
   state.revisions.push({ title, detail, stage });
 }
 
+function renderDataLimitations(limitations) {
+  const items = limitations.filter(Boolean);
+  els.dataLimitations.hidden = items.length === 0;
+  els.dataLimitations.innerHTML = items.length
+    ? `<strong>数据范围说明</strong><ul>${items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`
+    : "";
+}
+
 function parseAppId(url) {
   let parsed;
   try {
@@ -507,9 +632,49 @@ function parseAppId(url) {
   return match[1];
 }
 
+function validateImportedInput() {
+  const file = els.reviewFileInput.files?.[0];
+  if (!file) throw new Error("请选择 JSON 或 CSV 评论文件。");
+  if (!/\.(json|csv)$/i.test(file.name)) throw new Error("只支持 JSON 或 CSV 文件。");
+  if (file.size > 2 * 1024 * 1024) throw new Error("导入文件不能超过 2 MB。");
+}
+
+async function importReviewFile() {
+  const file = els.reviewFileInput.files[0];
+  let content;
+  try {
+    content = await file.text();
+  } catch {
+    throw new Error("无法读取导入文件，请重新选择文件。");
+  }
+  return apiRequest("/api/reviews/import", {
+    fileName: file.name,
+    content
+  });
+}
+
 function selectedCountryLabel() {
   const select = document.querySelector("#country");
   return select.options[select.selectedIndex]?.textContent || "所选地区";
+}
+
+function inferAnalysisMode(goal) {
+  const text = String(goal || "").toLowerCase();
+  const positive = ["高分", "好评", "正向", "优点", "优势", "满意", "认可", "成功经验", "positive", "high rating", "strength"].some((term) => text.includes(term));
+  const negative = ["低分", "差评", "负向", "问题", "缺陷", "痛点", "抱怨", "故障", "negative", "low rating", "issue", "complaint"].some((term) => text.includes(term));
+  if (positive && !negative) return "positive";
+  if (negative && !positive) return "negative";
+  return "balanced";
+}
+
+function setDeliverableVisibility() {
+  const positiveMode = state.analysisMode === "positive";
+  document.querySelectorAll('[data-tab="prd"], [data-tab="tests"], #panel-prd, #panel-tests').forEach((element) => {
+    element.hidden = positiveMode;
+  });
+  if (positiveMode && ["prd", "tests"].includes(document.querySelector(".tab.is-active")?.dataset.tab)) {
+    selectTab("insights");
+  }
 }
 
 function setFieldError(message) {
@@ -577,10 +742,12 @@ function setRunStatus(label, status) {
 }
 
 function renderPipeline() {
-  const statusLabels = { pending: "等待", running: "执行中", done: "已完成", error: "错误" };
+  const statusLabels = { pending: "等待", running: "执行中", done: "已完成", error: "错误", skipped: "不适用" };
   els.pipelineSteps.innerHTML = pipeline
     .map((stage, index) => {
-      const status = state.stageStatuses[index];
+      const status = state.analysisMode === "positive" && stage.id === "deliver"
+        ? "skipped"
+        : state.stageStatuses[index];
       return `
         <article class="pipeline-step is-${status}">
           <div class="stage-heading">
@@ -599,7 +766,8 @@ function renderExecution() {
   const passed = state.validations.filter((item) => item.type === "pass").length;
   els.validationMetrics.passed.textContent = String(passed);
   els.validationMetrics.errors.textContent = String(state.errors.length);
-  els.validationMetrics.revisions.textContent = String(state.revisions.length);
+  const handled = state.revisions.length + state.validations.filter((item) => item.type === "revised").length;
+  els.validationMetrics.revisions.textContent = String(handled);
   els.activitySummary.textContent = state.activities.length
     ? `${state.activities.length} 条事件 · ${state.running ? "持续更新中" : "记录已保存"}`
     : "等待任务启动";
@@ -732,6 +900,7 @@ function buildInsights(reviews) {
         evidenceIds: evidence.map((review) => review.id),
         supportCount: evidence.length,
         confidence: evidence.length >= 2 ? "高" : evidence.length === 1 ? "中" : "低",
+        conflictEvidenceIds: [],
         version: title.includes("订阅") ? "v0.2 已修订" : "v0.1 已验证",
         conflict: title.includes("订阅")
           ? "正向评论认可训练内容，因此结论已收敛为付费流程问题，而非核心训练价值问题。"
@@ -834,7 +1003,7 @@ function renderMetrics() {
   els.metrics.collected.textContent = String(state.reviews.length);
   els.metrics.cleaned.textContent = String(state.cleaned.length);
   els.metrics.rating.textContent = avgRating.toFixed(1);
-  els.metrics.trace.textContent = String(state.tests.length);
+  els.metrics.trace.textContent = String(state.analysisMode === "positive" ? state.insights.length : state.tests.length);
 }
 
 function renderArtifactCounts() {
@@ -883,12 +1052,21 @@ function renderCleanedReviews() {
 }
 
 function renderCategories() {
+  const insightHeading = document.querySelector("#insights h2");
+  const insightDescription = document.querySelector("#insights > p");
+  if (insightHeading) insightHeading.textContent = state.analysisMode === "positive" ? "产品优点" : "洞察发现";
+  if (insightDescription) {
+    insightDescription.textContent = state.analysisMode === "positive"
+      ? "从高分评论中提炼用户认可的产品能力，并保留评论证据。"
+      : "每项发现均需包含评论引用、支持数量、冲突信息和置信度。";
+  }
   els.categoryTable.innerHTML = state.categories.length
     ? state.categories
         .map(
           (item) => `
             <tr>
               <td>${escapeHtml(item.reviewId)}</td>
+              <td class="rating">${escapeHtml(state.cleaned.find((review) => review.id === item.reviewId)?.rating || "未知")}</td>
               <td><span class="inline-status is-${sentimentClass(item.sentiment)}">${item.sentiment}</span></td>
               <td>${escapeHtml(item.theme)}</td>
               <td>${escapeHtml(item.severity)}</td>
@@ -897,7 +1075,7 @@ function renderCategories() {
           `
         )
         .join("")
-    : tableEmptyState(5, "评论分类阶段完成后将在此展示语义标签。");
+    : tableEmptyState(6, "评论分类阶段完成后将在此展示语义标签。");
 }
 
 function sentimentClass(sentiment) {
@@ -907,29 +1085,92 @@ function sentimentClass(sentiment) {
 }
 
 function renderInsights() {
-  els.insightList.innerHTML = state.insights.length
-    ? state.insights
+  const before = state.insightsBeforeRevision;
+  const after = state.insightsAfterRevision;
+  els.insightList.innerHTML = `
+    ${renderInsightVersion(
+      "修订前洞察",
+      "洞察 Agent 首次生成的版本，作为证据审查和修订的输入。",
+      before,
+      "洞察发现阶段完成后将在此展示首次生成结果。",
+      "before"
+    )}
+    ${renderInsightVersion(
+      "修订后洞察",
+      "经过证据审查和可能的修订后的版本；若无需修订，这里展示审查后的最终结果。",
+      after,
+      "证据审查完成后将在此展示最终处理结果。",
+      "after"
+    )}
+  `;
+
+  els.rejectedFindingList.innerHTML = state.rejectedFindings.length
+    ? `<div class="rejected-heading">已删除的不支持结论（保留审计记录）</div>${state.rejectedFindings
         .map(
           (finding) => `
-            <article class="result-item">
+            <article class="result-item rejected-item">
               <header>
-                <div>
-                  <h4>${finding.id}: ${escapeHtml(finding.title)}</h4>
-                  <small>${escapeHtml(finding.version)}</small>
-                </div>
-                <span class="tag">置信度 ${finding.confidence}</span>
+                <div><h4>${escapeHtml(finding.id)}: ${escapeHtml(finding.title || "未命名结论")}</h4></div>
+                <span class="tag is-rejected">已拒绝</span>
               </header>
-              <p>${escapeHtml(finding.summary)}</p>
-              <div class="meta-row">
-                <span class="tag">支持数 ${finding.supportCount}</span>
-                <span class="tag">证据 ${finding.evidenceIds.join(", ")}</span>
-                <span class="tag is-warning">${escapeHtml(finding.conflict)}</span>
-              </div>
+              <p>${escapeHtml(finding.statusReason || "证据校验未通过，未进入需求和测试产物。")}</p>
+              <div class="meta-row"><span class="tag">原证据 ${escapeHtml((finding.evidenceIds || []).join(", ") || "无")}</span></div>
             </article>
           `
         )
-        .join("")
-    : emptyState("洞察与验证阶段完成后将在此生成证据驱动的发现。");
+        .join("")}`
+    : "";
+}
+
+function renderInsightVersion(title, description, findings, emptyMessage, version) {
+  return `
+    <section class="insight-version-section">
+      <div class="insight-version-heading">
+        <div>
+          <h3>${title} <span>${findings.length}</span></h3>
+          <p>${description}</p>
+        </div>
+      </div>
+      <div class="result-list">
+        ${findings.length ? findings.map((finding) => renderInsightCard(finding, version)).join("") : emptyState(emptyMessage, "compact")}
+      </div>
+    </section>
+  `;
+}
+
+function renderInsightCard(finding, version) {
+  const conflictIds = finding.conflictEvidenceIds || [];
+  const statusBadge = version === "before"
+    ? '<span class="tag is-warning">待审查</span>'
+    : finding.status === "hypothesis"
+    ? '<span class="tag is-warning">假设</span>'
+    : finding.status === "revised"
+      ? '<span class="tag is-warning">已修订</span>'
+      : '<span class="tag is-pass">证据支持</span>';
+  return `
+    <article class="result-item">
+      <header>
+        <div>
+          <h4>${escapeHtml(finding.id)}: ${escapeHtml(finding.title)}</h4>
+          <small>${escapeHtml(finding.version)}</small>
+        </div>
+      </header>
+      <p>${escapeHtml(finding.summary)}</p>
+      <div class="meta-row">
+        <span class="tag">置信度 ${escapeHtml(finding.confidence)}</span>
+        <span class="tag">支持数 ${finding.supportCount}</span>
+        <span class="tag">Review 证据 ${escapeHtml((finding.evidenceIds || []).join(", ") || "无")}</span>
+        <span class="tag is-warning">冲突证据 ${escapeHtml(conflictIds.join(", ") || "无")}</span>
+        ${statusBadge}
+      </div>
+      ${finding.status === "hypothesis" && finding.statusReason
+        ? `<p class="finding-status-note"><strong>假设说明：</strong>${escapeHtml(finding.statusReason)}</p>`
+        : ""}
+      ${finding.conflict
+        ? `<p class="finding-conflict-note"><strong>冲突说明：</strong>${escapeHtml(finding.conflict)}</p>`
+        : ""}
+    </article>
+  `;
 }
 
 function renderRequirements() {
@@ -941,13 +1182,13 @@ function renderRequirements() {
               <header>
                 <div>
                   <h4>${requirement.id}: ${escapeHtml(requirement.title)}</h4>
-                  <small>${requirement.version}</small>
+                <small>${escapeHtml(requirement.version)}</small>
                 </div>
-                <span class="tag ${requirement.priority === "P0" ? "is-risk" : ""}">${requirement.priority}</span>
+                <span class="tag ${requirement.priority === "P0" ? "is-risk" : ""}">${escapeHtml(requirement.priority)}</span>
               </header>
               <p><strong>验收标准：</strong>${escapeHtml(requirement.acceptance)}</p>
               <div class="meta-row">
-                <span class="tag">源洞察 ${requirement.sourceFindingId}</span>
+                <span class="tag">Finding ${escapeHtml(requirement.sourceFindingId)}</span>
               </div>
             </article>
           `
@@ -965,14 +1206,14 @@ function renderTests() {
               <header>
                 <div>
                   <h4>${test.id}: ${escapeHtml(test.title)}</h4>
-                  <small>${test.version}</small>
+                <small>${escapeHtml(test.version)}</small>
                 </div>
-                <span class="tag">${test.requirementId}</span>
+                <span class="tag">${escapeHtml(test.requirementId)}</span>
               </header>
               <p><strong>操作步骤：</strong>${escapeHtml(test.steps)}</p>
               <p><strong>预期结果：</strong>${escapeHtml(test.expected)}</p>
               <div class="meta-row">
-                <span class="tag">源洞察 ${test.sourceFindingId}</span>
+                <span class="tag">Finding ${escapeHtml(test.sourceFindingId)}</span>
               </div>
             </article>
           `

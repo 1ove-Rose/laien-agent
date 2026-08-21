@@ -10,18 +10,45 @@
     <main class="app-shell">
       <header class="site-header">
         <a class="brand" href="#" aria-label="应用评论洞察首页">
-          <span class="brand-mark">A</span>
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" focusable="false">
+              <path d="M4 19V5" />
+              <path d="M4 19h16" />
+              <path d="m7 15 3-4 3 2 5-6" />
+              <path d="M15 7h3v3" />
+            </svg>
+          </span>
           <span>
             <strong>应用评论洞察</strong>
             <small>从证据到产品路线图</small>
           </span>
         </a>
         <nav class="nav-links" aria-label="主导航">
-          <a href="#pipeline">分析流程</a>
-          <a href="#execution">执行监控</a>
-          <a href="#insights">洞察发现</a>
-          <a href="#prd">产品需求</a>
-          <a href="#tests">测试用例</a>
+          <a href="#pipeline">
+            <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <rect x="4" y="4" width="6" height="6" rx="1" />
+              <rect x="14" y="14" width="6" height="6" rx="1" />
+              <path d="M10 7h4a2 2 0 0 1 2 2v5" />
+              <path d="m13 12 3 3 3-3" />
+            </svg>
+            <span>分析流程</span>
+          </a>
+          <a href="#execution">
+            <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M4 19V5" />
+              <path d="M4 19h16" />
+              <path d="m7 15 3-4 3 2 4-6" />
+            </svg>
+            <span>执行监控</span>
+          </a>
+          <a href="#artifacts">
+            <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h3l2 2h6A2.5 2.5 0 0 1 20 8.5v9A2.5 2.5 0 0 1 17.5 20h-11A2.5 2.5 0 0 1 4 17.5Z" />
+              <path d="M4 9h16" />
+              <path d="M9 13h6" />
+            </svg>
+            <span>产物工作区</span>
+          </a>
         </nav>
         <div class="status-pill" id="run-status">待分析</div>
       </header>
@@ -37,6 +64,12 @@
         </div>
 
         <form id="analysis-form" class="search-console">
+          <div class="input-mode-tabs" role="tablist" aria-label="评论来源">
+            <button class="input-mode is-active" type="button" data-input-mode="apple">App Store 链接</button>
+            <button class="input-mode" type="button" data-input-mode="file">导入 JSON / CSV</button>
+          </div>
+
+          <div id="apple-input-panel">
           <label class="search-box">
             <span>App Store 链接</span>
             <input
@@ -48,6 +81,16 @@
             />
             <small id="app-url-error" class="field-error" hidden></small>
           </label>
+          </div>
+
+          <div id="file-input-panel" hidden>
+            <label class="field import-file-field">
+              <span>评论文件</span>
+              <input id="review-file" type="file" accept=".json,.csv,application/json,text/csv" />
+              <small class="field-hint">支持评论数组 JSON、reviews 数组 JSON 和带表头 CSV，最多 500 条。</small>
+            </label>
+            <small id="import-file-error" class="field-error" hidden></small>
+          </div>
 
           <label class="field">
             <span>分析目标</span>
@@ -59,7 +102,7 @@
             >关注低评分评论、订阅阻碍、易用性缺陷，以及可转化为产品路线图需求的主题。</textarea>
           </label>
 
-          <div class="control-grid">
+          <div id="apple-options-panel" class="control-grid">
             <label class="field">
               <span>国家/地区</span>
               <select id="country" name="country">
@@ -70,9 +113,9 @@
             <label class="field">
               <span>目标采集数</span>
               <select id="max-reviews" name="maxReviews">
+                <option value="50">50</option>
                 <option value="100">100</option>
-                <option value="200" selected>200</option>
-                <option value="400">400</option>
+                <option value="200">200</option>
               </select>
             </label>
           </div>
@@ -89,7 +132,7 @@
             <p></p>
           </div>
 
-          <div class="quick-prompts" aria-label="示例应用">
+          <div id="apple-examples-panel" class="quick-prompts" aria-label="示例应用">
             <button type="button" data-url="https://apps.apple.com/us/app/chatgpt/id6448311069">
               ChatGPT
             </button>
@@ -169,7 +212,7 @@
               <div class="validation-metrics">
                 <div><strong id="validation-passed">0</strong><span>验证通过</span></div>
                 <div><strong id="validation-errors">0</strong><span>错误</span></div>
-                <div><strong id="validation-revisions">0</strong><span>已修订</span></div>
+                <div><strong id="validation-revisions">0</strong><span>已处置</span></div>
               </div>
               <div id="validation-list" class="validation-list"></div>
               <div id="revision-list" class="revision-list"></div>
@@ -177,7 +220,7 @@
           </div>
         </section>
 
-        <section class="panel panel-large tabs" aria-label="分析结果标签页">
+        <section id="artifacts" class="panel panel-large tabs" aria-label="分析结果标签页">
           <div class="artifact-header">
             <div>
               <p class="eyebrow">中间与最终交付</p>
@@ -185,6 +228,7 @@
             </div>
             <p id="artifact-note">运行分析后将采集真实评论并逐阶段生成后续产物。</p>
           </div>
+          <div id="data-limitations" class="data-limitations" hidden></div>
           <div class="tab-list" role="tablist">
             <button class="tab is-active" type="button" data-tab="raw">
               原始评论 <span id="count-raw">0</span>
@@ -267,6 +311,7 @@
                 <thead>
                   <tr>
                     <th>评论 ID</th>
+                    <th>评分</th>
                     <th>情感</th>
                     <th>主题</th>
                     <th>严重程度</th>
@@ -284,9 +329,10 @@
                 <p class="eyebrow">证据优先</p>
                 <h2>洞察发现</h2>
               </div>
-              <p>每项发现均需包含评论引用、支持数量、冲突信息和置信度。</p>
+              <p>分开展示首次生成和证据审查后的洞察，保留评论引用、冲突证据和假设标记。</p>
             </div>
             <div id="insight-list" class="result-list"></div>
+            <div id="rejected-finding-list" class="result-list"></div>
           </div>
 
           <div class="tab-panel" id="panel-prd">
@@ -295,7 +341,7 @@
                 <p class="eyebrow">产品规划初稿</p>
                 <h2>PRD 初稿</h2>
               </div>
-              <p>每条需求均关联源洞察和评论证据。</p>
+              <p>每条需求均关联源洞察和评论证据；假设状态会沿链路保留。</p>
             </div>
             <div id="prd-list" class="result-list"></div>
           </div>
@@ -306,7 +352,7 @@
                 <p class="eyebrow">QA 初稿</p>
                 <h2>测试用例初稿</h2>
               </div>
-              <p>每个测试均映射至需求，并继承源评论链接。</p>
+              <p>每个测试均映射至需求，并继承源评论链接和假设/修订状态。</p>
             </div>
             <div id="test-list" class="result-list"></div>
           </div>

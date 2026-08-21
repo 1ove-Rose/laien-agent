@@ -27,7 +27,7 @@ def resolve_model_config(environ=None):
 
     raise AgentRunError(
         "MODEL_CONFIG_MISSING",
-        "缺少 OPENAI_API_KEY，无法运行多 Agent 分析。",
+        "缺少 OPENAI_API_KEY。请在项目根目录的 .env 或 .env.example 文件中配置模型 API Key。",
         stage="模型配置",
         retryable=False,
     )
@@ -37,16 +37,25 @@ def create_llm():
     from dotenv import load_dotenv
     from langchain_openai import ChatOpenAI
 
-    project_env = Path(__file__).resolve().parents[1] / ".env"
-    load_dotenv(project_env, override=False)
+    project_root = Path(__file__).resolve().parents[1]
+    project_env = project_root / ".env"
+    example_env = project_root / ".env.example"
+    config_env = project_env if project_env.exists() else example_env
+    load_dotenv(config_env, override=False)
     config = resolve_model_config()
 
     kwargs = {
         "api_key": config["api_key"],
         "model": config["model"],
         "temperature": float(os.getenv("OPENAI_TEMPERATURE", "0.2")),
-        "timeout": float(os.getenv("AGENT_LLM_TIMEOUT_SECONDS", "45")),
+        "timeout": float(os.getenv("AGENT_LLM_TIMEOUT_SECONDS", "180")),
     }
+    reasoning_effort = os.getenv("OPENAI_REASONING_EFFORT", "").strip()
+    if reasoning_effort:
+        kwargs["reasoning_effort"] = reasoning_effort
+    thinking_type = os.getenv("OPENAI_THINKING_TYPE", "").strip()
+    if thinking_type and thinking_type.lower() not in {"disabled", "off", "false", "0"}:
+        kwargs["extra_body"] = {"thinking": {"type": thinking_type}}
     base_url = config["base_url"]
     if base_url:
         kwargs["base_url"] = base_url
@@ -77,19 +86,87 @@ def is_retryable_error(error):
     status = getattr(error, "status_code", None) or getattr(getattr(error, "response", None), "status_code", None)
     if status in (408, 409, 429) or (isinstance(status, int) and status >= 500):
         return True
-    return isinstance(error, (TimeoutError, asyncio.TimeoutError, ConnectionError))
+    return is_timeout_error(error) or isinstance(error, ConnectionError)
+
+
+def is_timeout_error(error):
+    if isinstance(error, (TimeoutError, asyncio.TimeoutError)):
+        return True
+    return any(
+        marker in error.__class__.__name__.lower()
+        for marker in ("timeout", "readtimeout", "connecttimeout", "writetimeout")
+    )
+
+
+def model_error_message(error):
+    status = getattr(error, "status_code", None) or getattr(getattr(error, "response", None), "status_code", None)
+    messages = {
+        400: "模型请求参数不兼容，请检查模型名称和高级推理配置。",
+        401: "模型 API Key 无效或已过期，请检查 OPENAI_API_KEY。",
+        403: "模型 API Key 没有调用权限，请检查账户权限。",
+        404: "模型或 API 地址不存在，请检查 OPENAI_BASE_URL 和 OPENAI_MODEL。",
+        402: "模型账户余额不足或未开通计费。",
+        408: "模型请求超时。",
+        429: "模型接口触发限流，请稍后重试。",
+    }
+    if status in messages:
+        return messages[status]
+    if isinstance(status, int) and status >= 500:
+        return "模型服务暂时不可用，请稍后重试。"
+    if is_timeout_error(error):
+        return "模型请求超时。"
+    if isinstance(error, ConnectionError):
+        return "无法连接模型服务，请检查网络和 OPENAI_BASE_URL。"
+    return "模型请求失败，请检查模型配置和服务日志。"
+
+
+async def emit_model_heartbeat(writer, stage, timeout_seconds):
+    elapsed = 0
+    interval = 15
+    while elapsed + interval < timeout_seconds:
+        await asyncio.sleep(interval)
+        elapsed += interval
+        if writer:
+            writer({
+                "type": "progress",
+                "stage": stage,
+                "message": f"模型仍在处理{stage}，已等待约 {elapsed} 秒。",
+                "data": {"elapsedSeconds": elapsed, "timeoutSeconds": timeout_seconds},
+            })
 
 
 async def invoke_json(llm, *, stage, system, user, response_model: Type[BaseModel], writer=None):
+    if writer is None:
+        try:
+            from langgraph.config import get_stream_writer
+            writer = get_stream_writer()
+        except (ImportError, RuntimeError):
+            writer = None
     from langchain_core.messages import HumanMessage, SystemMessage
 
     messages = [SystemMessage(content=system), HumanMessage(content=user)]
     request_failures = 0
     parse_failures = 0
+    timeout_seconds = float(os.getenv("AGENT_LLM_TIMEOUT_SECONDS", "180"))
 
     while True:
         try:
-            response = await llm.ainvoke(messages)
+            if writer:
+                writer({
+                    "type": "progress",
+                    "stage": stage,
+                    "message": f"正在等待模型返回{stage}结果。",
+                    "data": {
+                        "attempt": request_failures + 1,
+                        "timeoutSeconds": timeout_seconds,
+                    },
+                })
+            heartbeat = asyncio.create_task(emit_model_heartbeat(writer, stage, timeout_seconds))
+            try:
+                response = await asyncio.wait_for(llm.ainvoke(messages), timeout=timeout_seconds)
+            finally:
+                heartbeat.cancel()
+                await asyncio.gather(heartbeat, return_exceptions=True)
             text = extract_text(response)
             if not text.strip():
                 raise ValueError("model returned empty content")
@@ -117,7 +194,7 @@ async def invoke_json(llm, *, stage, system, user, response_model: Type[BaseMode
             if request_failures >= 2 or not is_retryable_error(exc):
                 raise AgentRunError(
                     "MODEL_REQUEST_FAILED",
-                    "模型请求失败。",
+                    model_error_message(exc),
                     stage=stage,
                     retryable=is_retryable_error(exc),
                     cause=exc,
